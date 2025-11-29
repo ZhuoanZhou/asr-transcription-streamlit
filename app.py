@@ -117,12 +117,6 @@ if "participant_id" not in st.session_state:
 if "num_plays" not in st.session_state:
     st.session_state.num_plays = 0
 
-try:
-    audio_bytes = load_audio_from_drive(drive_file_id)
-    st.audio(audio_bytes, format="audio/wav")
-except Exception as e:
-    st.error("Could not load the audio file from Google Drive.")
-    st.exception(e)    
 
 """
 # For this simple demo, we use a single fixed audio file
