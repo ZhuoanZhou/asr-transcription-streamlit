@@ -41,26 +41,26 @@ HEADPHONE_ITEMS = [
     {
         "id": "hp1",
         "label": "Headphone check item 1",
-        "drive_file_id": "PUT_HEADPHONE_FILE_ID_1",
-        "options": ["Option A1 (replace)", "Option B1 (replace)"],
+        "drive_file_id": "14rLe5MuNfyjUbZJ5_6iBGa8PGSXKgsWO",
+        "options": ["feed", "seed"],
     },
     {
         "id": "hp2",
         "label": "Headphone check item 2",
-        "drive_file_id": "PUT_HEADPHONE_FILE_ID_2",
-        "options": ["Option A2 (replace)", "Option B2 (replace)"],
+        "drive_file_id": "1lh3QSGNc58oef5HTYNh1Q0C7vP6TRydo",
+        "options": ["lift", "left"],
     },
     {
         "id": "hp3",
         "label": "Headphone check item 3",
-        "drive_file_id": "PUT_HEADPHONE_FILE_ID_3",
-        "options": ["Option A3 (replace)", "Option B3 (replace)"],
+        "drive_file_id": "12Qyd7Td5hkESJ6ehbfn8ApAoLNozfSHU",
+        "options": ["storm", "swarm"],
     },
     {
         "id": "hp4",
         "label": "Headphone check item 4",
-        "drive_file_id": "PUT_HEADPHONE_FILE_ID_4",
-        "options": ["Option A4 (replace)", "Option B4 (replace)"],
+        "drive_file_id": "1YL5KBMBHc0H3afH4A8mRVzdn-CKlPOLm",
+        "options": ["hair", "here"],
     },
 ]
 
@@ -68,23 +68,23 @@ MAIN_ITEMS = {
     # Page name -> config
     "item_1": {
         "audio_id": "sentence_1",
-        "drive_file_id": "PUT_SENTENCE_FILE_ID_1",
+        "drive_file_id": "1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe",
     },
     "item_2": {
         "audio_id": "sentence_2",
-        "drive_file_id": "PUT_SENTENCE_FILE_ID_2",
+        "drive_file_id": "1oNWptEpkTXEw7j1o0uhDPnin_Ndvlfco",
     },
     "item_3": {
         "audio_id": "sentence_3",
-        "drive_file_id": "PUT_SENTENCE_FILE_ID_3",
+        "drive_file_id": "1ucOAJ1Zh-UVPbiWh_W41ZW172KA8uCvF",
     },
     "item_4": {
         "audio_id": "sentence_4",
-        "drive_file_id": "PUT_SENTENCE_FILE_ID_4",
+        "drive_file_id": "1o2rFP2S3NpjU6geyFe_Ezd9282qsmvyv",
     },
     "item_5": {
         "audio_id": "sentence_5",
-        "drive_file_id": "PUT_SENTENCE_FILE_ID_5",
+        "drive_file_id": "1yO4DE-_u6JRFMLyY9BrCyJsk9f-K7h_y",
     },
 }
 
