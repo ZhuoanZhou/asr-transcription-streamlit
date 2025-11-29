@@ -127,7 +127,7 @@ audio_path = Path("audio") / "sample.wav"  # adjust name if needed
 AUDIO_ID = "audio_001"
 # Todo: add links to the audio files
 AUDIO_FILE_IDS = {
-    "audio_001": "https://drive.google.com/file/d/1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe/view?usp=drive_link",  # from Google Drive URL
+    "audio_001": "1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe",  # from Google Drive URL
     # later you can add more:
     # "audio_002": "ANOTHER_FILE_ID",
 }
@@ -171,52 +171,40 @@ if st.session_state.start_time is not None:
     else:
         st.warning("You have reached the maximum of 2 plays for this audio.")
 
-    
-    """
-    # Only show the audio widget when show_audio is True
+
+if st.session_state.start_time is not None:
+    st.subheader("Step 2: Listen and transcribe")
+
+    st.markdown("You may listen **up to two times**. Please follow the instruction honestly.")
+
+    if "num_plays" not in st.session_state:
+        st.session_state.num_plays = 0
+    if "show_audio" not in st.session_state:
+        st.session_state.show_audio = False
+
+    if st.session_state.num_plays < 2:
+        play_label = f"▶️ Play audio (play #{st.session_state.num_plays + 1} of 2)"
+        if st.button(play_label):
+            st.session_state.num_plays += 1
+            st.session_state.show_audio = True
+    else:
+        st.warning("You have reached the maximum of 2 plays for this audio.")
+
     if st.session_state.show_audio:
-        if not audio_path.exists():
-            st.error(f"Audio file not found: {audio_path}")
-        else:
-            with open(audio_path, "rb") as f:
-                audio_bytes = f.read()
+        drive_file_id = AUDIO_FILE_IDS[AUDIO_ID]
+        try:
+            audio_bytes = load_audio_from_drive(drive_file_id)
             st.audio(audio_bytes, format="audio/wav")
             st.info(
                 "Use the player controls to listen. "
                 "Please remember this still counts as ONE play, even if you scrub back."
             )
-    """
-    
-    drive_file_id = AUDIO_FILE_IDS[AUDIO_ID]
+        except Exception as e:
+            st.error("Could not load the audio file from Google Drive.")
+            st.exception(e)
 
-    try:
-        audio_bytes = load_audio_from_drive(drive_file_id)
-        st.audio(audio_bytes, format="audio/wav")
-    except Exception as e:
-        st.error("Could not load the audio file from Google Drive.")
-        st.exception(e)
-    
-    """
-    st.markdown("You may listen **up to two times**. Please follow the instruction honestly.")
-
-    # We cannot programmatically detect play events from st.audio,
-    # but we can provide a manual counter button if you want.
-
-    # Optional: add a button to keep track of how many times they *say* they played
-    if st.button("I am playing the audio now (manual counter)"):
-        st.session_state.num_plays += 1
-        st.write(f"You have indicated **{st.session_state.num_plays}** play(s). Please do not exceed 2.")
-    
-    if not audio_path.exists():
-        st.error(f"Audio file not found: {audio_path}")
-    else:
-        with open(audio_path, "rb") as f:
-            audio_bytes = f.read()
-        st.audio(audio_bytes, format="audio/wav")
-    """
-    
     st.write("---")
-
+    
     st.subheader("Step 3: Type your transcript")
 
     with st.form("transcription_form"):
