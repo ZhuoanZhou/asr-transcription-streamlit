@@ -29,6 +29,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 import uuid
 
+import io
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+
 # -----------------------------
 # Google Sheets helper
 # -----------------------------
@@ -47,6 +52,34 @@ def get_worksheet():
 
     # Use the first sheet (Sheet1)
     return sh.sheet1
+
+@st.cache_resource
+def get_drive_service():
+    """Create a Drive API service client using the same service account."""
+    sa_info = st.secrets["gcp_service_account"]
+
+    creds = Credentials.from_service_account_info(
+        sa_info,
+        scopes=["https://www.googleapis.com/auth/drive.readonly"],
+    )
+    service = build("drive", "v3", credentials=creds)
+    return service
+
+
+def load_audio_from_drive(file_id: str) -> bytes:
+    """Download an audio file from Google Drive and return raw bytes."""
+    service = get_drive_service()
+    request = service.files().get_media(fileId=file_id)
+
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+
+    fh.seek(0)
+    return fh.read()
 
 # -----------------------------
 # App setup
@@ -84,9 +117,28 @@ if "participant_id" not in st.session_state:
 if "num_plays" not in st.session_state:
     st.session_state.num_plays = 0
 
+drive_file_id = AUDIO_FILE_IDS[AUDIO_ID]
+
+try:
+    audio_bytes = load_audio_from_drive(drive_file_id)
+    st.audio(audio_bytes, format="audio/wav")
+except Exception as e:
+    st.error("Could not load the audio file from Google Drive.")
+    st.exception(e)    
+
+"""
 # For this simple demo, we use a single fixed audio file
 AUDIO_ID = "audio_001"
 audio_path = Path("audio") / "sample.wav"  # adjust name if needed
+"""
+
+AUDIO_ID = "audio_001"
+# Todo: add links to the audio files
+AUDIO_FILE_IDS = {
+    "audio_001": "https://drive.google.com/file/d/1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe/view?usp=sharing",  # from Google Drive URL
+    # later you can add more:
+    # "audio_002": "ANOTHER_FILE_ID",
+}
 
 worksheet = get_worksheet()
 
@@ -112,6 +164,49 @@ if st.session_state.start_time is not None:
 
     st.markdown("You may listen **up to two times**. Please follow the instruction honestly.")
 
+    # Ensure num_plays exists
+    if "num_plays" not in st.session_state:
+        st.session_state.num_plays = 0
+    if "show_audio" not in st.session_state:
+        st.session_state.show_audio = False
+
+    # Button to request a new play
+    if st.session_state.num_plays < 2:
+        play_label = f"▶️ Play audio (play #{st.session_state.num_plays + 1} of 2)"
+        if st.button(play_label):
+            st.session_state.num_plays += 1
+            st.session_state.show_audio = True
+    else:
+        st.warning("You have reached the maximum of 2 plays for this audio.")
+
+    
+    """
+    # Only show the audio widget when show_audio is True
+    if st.session_state.show_audio:
+        if not audio_path.exists():
+            st.error(f"Audio file not found: {audio_path}")
+        else:
+            with open(audio_path, "rb") as f:
+                audio_bytes = f.read()
+            st.audio(audio_bytes, format="audio/wav")
+            st.info(
+                "Use the player controls to listen. "
+                "Please remember this still counts as ONE play, even if you scrub back."
+            )
+    """
+    
+    drive_file_id = AUDIO_FILE_IDS[AUDIO_ID]
+
+    try:
+        audio_bytes = load_audio_from_drive(drive_file_id)
+        st.audio(audio_bytes, format="audio/wav")
+    except Exception as e:
+        st.error("Could not load the audio file from Google Drive.")
+        st.exception(e)
+    
+    """
+    st.markdown("You may listen **up to two times**. Please follow the instruction honestly.")
+
     # We cannot programmatically detect play events from st.audio,
     # but we can provide a manual counter button if you want.
 
@@ -119,14 +214,15 @@ if st.session_state.start_time is not None:
     if st.button("I am playing the audio now (manual counter)"):
         st.session_state.num_plays += 1
         st.write(f"You have indicated **{st.session_state.num_plays}** play(s). Please do not exceed 2.")
-
+    
     if not audio_path.exists():
         st.error(f"Audio file not found: {audio_path}")
     else:
         with open(audio_path, "rb") as f:
             audio_bytes = f.read()
         st.audio(audio_bytes, format="audio/wav")
-
+    """
+    
     st.write("---")
 
     st.subheader("Step 3: Type your transcript")
@@ -156,7 +252,7 @@ if st.session_state.start_time is not None:
                 end_time.isoformat(),                         # end_time
                 round(duration_sec, 3),                       # duration_sec
                 transcript,                                   # transcript
-                st.session_state.num_plays,                   # num_plays (manual count)
+                st.session_state.num_plays,                   # num_plays
             ]
 
             try:
