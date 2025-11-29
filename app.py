@@ -117,8 +117,6 @@ if "participant_id" not in st.session_state:
 if "num_plays" not in st.session_state:
     st.session_state.num_plays = 0
 
-drive_file_id = AUDIO_FILE_IDS[AUDIO_ID]
-
 try:
     audio_bytes = load_audio_from_drive(drive_file_id)
     st.audio(audio_bytes, format="audio/wav")
