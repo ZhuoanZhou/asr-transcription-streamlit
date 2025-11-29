@@ -6,6 +6,8 @@ import io
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+import base64
+import streamlit.components.v1 as components
 
 # -----------------------------
 # Google Sheets helper
@@ -49,6 +51,35 @@ def load_audio_from_drive(file_id: str) -> bytes:
 
     fh.seek(0)
     return fh.read()
+
+def render_limited_audio(audio_bytes: bytes, max_plays: int = 2):
+    """Render an HTML5 audio player that disables itself after max_plays."""
+    b64 = base64.b64encode(audio_bytes).decode("utf-8")
+
+    components.html(
+        f"""
+        <audio id="limitedAudio" controls>
+            <source src="data:audio/wav;base64,{b64}" type="audio/wav">
+            Your browser does not support the audio element.
+        </audio>
+        <script>
+        const audio = document.getElementById("limitedAudio");
+        let plays = 0;
+        if (audio) {{
+            audio.addEventListener("play", () => {{
+                plays += 1;
+                if (plays > {max_plays}) {{
+                    audio.pause();
+                    audio.currentTime = 0;
+                    audio.controls = false;
+                    alert("You have reached the maximum of {max_plays} plays.");
+                }}
+            }});
+        }}
+        </script>
+        """,
+        height=80,
+    )
 
 # -----------------------------
 # App setup
@@ -110,37 +141,19 @@ else:
 # Step 2: audio + plays
 # -----------------------------
 
+
+
 if st.session_state.start_time is not None:
     st.subheader("Step 2: Listen and transcribe")
-    st.markdown("You may listen **up to two times**. Please follow the instruction honestly.")
+    st.markdown("You may listen **up to two times**. After two plays, the player will be disabled.")
 
-    # Play button with 2-play limit
-    if st.session_state.num_plays < 2:
-        play_label = f"▶️ Play audio (play #{st.session_state.num_plays + 1} of 2)"
-        if st.button(play_label, key="play_audio_button"):
-            st.session_state.num_plays += 1
-            st.session_state.show_audio = True
-    else:
-        st.warning("You have reached the maximum of 2 plays for this audio.")
-        st.session_state.show_audio = False
-
-    # Only load and show audio when requested
-    if st.session_state.show_audio:
-        try:
-            drive_file_id = AUDIO_FILE_IDS[AUDIO_ID]
-        except KeyError:
-            st.error(f"Audio ID '{AUDIO_ID}' not found. Check AUDIO_FILE_IDS mapping.")
-        else:
-            try:
-                audio_bytes = load_audio_from_drive(drive_file_id)
-                st.audio(audio_bytes, format="audio/wav")
-                st.info(
-                    "Use the player controls to listen. "
-                    "Please remember this still counts as ONE play, even if you scrub back."
-                )
-            except Exception as e:
-                st.error("Could not load the audio file from Google Drive.")
-                st.exception(e)
+    try:
+        drive_file_id = AUDIO_FILE_IDS[AUDIO_ID]
+        audio_bytes = load_audio_from_drive(drive_file_id)
+        render_limited_audio(audio_bytes, max_plays=2)
+    except Exception as e:
+        st.error("Could not load the audio file from Google Drive.")
+        st.exception(e)
 
     st.write("---")
 
