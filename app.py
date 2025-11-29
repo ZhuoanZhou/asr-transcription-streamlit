@@ -214,7 +214,7 @@ def go_next_page():
     """Move to the next page in the flow (no going back)."""
     if st.session_state.page_index < len(PAGES) - 1:
         st.session_state.page_index += 1
-        st.experimental_rerun()
+        st.rerun()
 
 
 # --------------------------------------
@@ -457,7 +457,7 @@ def render_item_page(page_name: str, item_config: dict):
         if st.button("▶️ Start & show audio", key=f"start_audio_{page_name}"):
             st.session_state.item_start_times[page_name] = datetime.now(timezone.utc)
             st.session_state.item_audio_shown[page_name] = True
-            st.experimental_rerun()
+            st.rerun()
     else:
         st.info("Audio started. You may listen up to two times.")
 
