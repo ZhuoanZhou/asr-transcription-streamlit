@@ -127,7 +127,7 @@ audio_path = Path("audio") / "sample.wav"  # adjust name if needed
 AUDIO_ID = "audio_001"
 # Todo: add links to the audio files
 AUDIO_FILE_IDS = {
-    "audio_001": "https://drive.google.com/file/d/1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe/view?usp=sharing",  # from Google Drive URL
+    "audio_001": "https://drive.google.com/file/d/1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe/view?usp=drive_link",  # from Google Drive URL
     # later you can add more:
     # "audio_002": "ANOTHER_FILE_ID",
 }
