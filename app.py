@@ -90,11 +90,7 @@ worksheet = get_worksheet()
 # For now, a single audio clip from Drive
 AUDIO_ID = "audio_001"
 AUDIO_FILE_IDS = {
-    # 🚨 IMPORTANT: replace this with JUST the file ID (not the whole URL)
-    # e.g. if URL is:
-    # https://drive.google.com/file/d/1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe/view?usp=drive_link
-    # then the file ID is: 1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe
-    "audio_001": "PUT_YOUR_FILE_ID_HERE",
+    "audio_001": "1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe",
 }
 
 # -----------------------------
