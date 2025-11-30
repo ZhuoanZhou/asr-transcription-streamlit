@@ -25,6 +25,7 @@ PAGES = [
     "item_3",         # Page 7
     "item_4",         # Page 8
     "item_5",         # Page 9
+    "thank_you",      # Page 10
 ]
 
 # --------------------------------------
@@ -511,7 +512,7 @@ def render_item_page(page_name: str, item_config: dict):
         duration_sec = (end_time - start_time).total_seconds()
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Columns required:
+        # Columns:
         # [timestamp_utc, participant_id, audio_id, start_time, end_time,
         #  duration_sec, first_transcript, second_transcript]
         row = [
@@ -537,8 +538,21 @@ def render_item_page(page_name: str, item_config: dict):
             del st.session_state.item_start_times[page_name]
         st.session_state.item_audio_shown[page_name] = False
 
-        # Move to next page
+        # Move to next page (eventually leads to thank_you)
         go_next_page()
+
+
+def render_thank_you():
+    st.title("Thank you!")
+    st.markdown(
+        """
+        Thank you for participating in this study.  
+        Your responses have been recorded.
+
+        You may now **close this window**.
+        """
+    )
+    st.write(f"Your participant ID (for your records): `{st.session_state.participant_id}`")
 
 
 # --------------------------------------
@@ -557,6 +571,8 @@ def main():
         render_instructions()
     elif current_page in MAIN_ITEMS:
         render_item_page(current_page, MAIN_ITEMS[current_page])
+    elif current_page == "thank_you":
+        render_thank_you()
     else:
         st.error("Unknown page state. Please refresh the app.")
 
