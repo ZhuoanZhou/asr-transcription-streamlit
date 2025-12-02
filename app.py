@@ -414,6 +414,7 @@ def render_instructions():
 
         **Important notes:**
 
+        - When playing the audio, please wait until the end, then play the audio the second time.
         - When writing down the transcript, only write down the words that you can understand. **Do not guess.**  
         - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing.  
           Just leave a "_" in between two words as a placeholder.  
