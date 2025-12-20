@@ -239,6 +239,8 @@ def render_intro():
 
         Your responses will be stored anonymously using a random participant ID.
         Please follow the instructions carefully and answer honestly.
+        You may pause and continue the study at any time.
+        Please keep the web page open and do not leave for more than 12 hours.
         """
     )
 
@@ -404,7 +406,7 @@ def render_instructions():
 
         1. Click **Start & show audio** to begin.  
            - Your time will start from that moment.  
-        2. Click **Play** in the audio player to hear the sentence.  
+        2. Click **Play** in the audio player to hear the sentence. Please wait until the audio stops.
         3. After the first listen, type exactly what you think the speaker said in the text box **"First transcript"**.  
         4. You may then listen **one more time** (the player allows at most two plays).  
         5. After the second listen, you may edit or correct your transcript in the text box **"Second transcript"** if you notice new words or corrections.  
@@ -414,11 +416,15 @@ def render_instructions():
 
         **Important notes:**
 
-        - When playing the audio, please wait until the end, then play the audio the second time.
-        - When writing down the transcript, only write down the words that you can understand. **Do not guess.**  
+        - The sentences you will listen to are the speech of individuals who have dysarthria, or a disability that affects the clarity of their speech.
+        - Many of the spoken sentences may be difficult to understand. It is OK not to be sure what you heard. 
+        - We are not testing how well you understand the speech. Rather, we are testing how technology can improve speech transcription. 
+        - Please listen carefully, follow the instructions, and write your best guess.
         - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing.  
           Just leave a "_" in between two words as a placeholder.  
-          - Example: write `"I want to _ water."` for `"I want to buy a bottle of water."`
+          - Example: write `"I want to _ water."` for `"I want to [buy a bottle of] water."`
+        - Your responses will be stored anonymously using a random participant ID.
+        - You will recieve a code at the end.
         """
     )
 
@@ -549,11 +555,12 @@ def render_thank_you():
         """
         Thank you for participating in this study.  
         Your responses have been recorded.
+        Please copy and paste the code below in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card.
 
-        You may now **close this window**.
+        You may now **close this window** after save the code.
         """
     )
-    st.write(f"Your participant ID (for your records): `{st.session_state.participant_id}`")
+    st.write(f"Your code: `{st.session_state.participant_id}`")
 
 
 # --------------------------------------
