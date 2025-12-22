@@ -321,6 +321,7 @@ def render_headphone_check():
         - You can adjust your volume accordingly.  
         - For each item, click the audio, listen once, and choose which word you heard.  
         - You are allowed to listen to each item **up to two times**.
+        - Please wait until the audio stops before starting your second playback.
         """
     )
 
