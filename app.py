@@ -12,9 +12,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import streamlit.components.v1 as components
 
-# Turn this to False once everything works
-DEBUG = False
-
 # --------------------------------------
 # Page configuration
 # --------------------------------------
@@ -172,14 +169,6 @@ def get_audio_index():
             if not page_token:
                 break
 
-        if DEBUG:
-            st.write(f"DEBUG: Found {total_for_folder} audio files in folder '{folder_key}'")
-
-    if DEBUG:
-        sample_keys = list(index.keys())[:10]
-        st.write("DEBUG: Sample audio_index keys (folder, filename):")
-        st.write(sample_keys)
-
     return index
 
 
@@ -204,7 +193,6 @@ def get_main_items():
     audio_index = get_audio_index()
 
     main_items = {}
-    debug_rows = []
     counter = 1
 
     for row in reader:
@@ -228,14 +216,6 @@ def get_main_items():
 
         file_id = audio_index.get((folder_key, filename))
 
-        debug_rows.append({
-            "raw_path": raw_path,
-            "normalized_path": normalized_path,
-            "folder_key": folder_key,
-            "filename": filename,
-            "found": bool(file_id),
-        })
-
         if not file_id:
             # No match in Drive for this row; skip for now
             continue
@@ -248,12 +228,6 @@ def get_main_items():
         }
         counter += 1
 
-    if DEBUG:
-        st.write(f"DEBUG: meta_data.csv rows processed: {len(debug_rows)}")
-        st.write(f"DEBUG: main_items created (matched rows): {len(main_items)}")
-        st.write("DEBUG: First 10 meta_data rows with match info:")
-        # This will display a small table with raw_path, normalized_path, filename, found=True/False
-        st.table(debug_rows[:10])
 
     return main_items
 
@@ -566,13 +540,6 @@ def render_instructions():
         - You will recieve a code at the end.
         """
     )
-
-    if DEBUG:
-        st.write("DEBUG: Number of main_items:", total_items)
-        first_keys = list(main_items.keys())[:5]
-        st.write("DEBUG: First 5 item page names:", first_keys)
-        st.write("DEBUG: First 5 audio_ids:")
-        st.write([main_items[k]["audio_id"] for k in first_keys])
     
     if st.button("Next", key="instructions_next"):
         go_next_page()
