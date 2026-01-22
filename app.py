@@ -342,7 +342,7 @@ def render_intro():
         - Answer a few brief screening questions  
         - Complete a short headphone/speaker check  
         - Read instructions about how to transcribe  
-        - Transcribe a series of **short spoken items** (sentences or phrases), one at a time
+        - Transcribe a series of **short spoken items** (single words, sentences, or phrases), one at a time
 
         Your responses will be stored anonymously.
         Please follow the instructions carefully and answer honestly.
@@ -531,13 +531,12 @@ def render_instructions():
 
         - The sentences you will listen to are the speech of individuals who have dysarthria, or a disability that affects the clarity of their speech.
         - Many of the spoken sentences may be difficult to understand. It is OK not to be sure what you heard. 
-        - We are not testing how well you understand the speech. Rather, we are testing how technology can improve speech transcription. 
         - Please listen carefully, follow the instructions, and write your best guess.
         - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing.  
-          Just leave a "_" in between two words as a placeholder.  
-          - Example: write `"I want to _ water."` for `"I want to [buy a bottle of] water."`
-        - Your responses will be stored anonymously using a random participant ID.
-        - You will recieve a code at the end.
+          Just leave a place holder (e.g. "...", "_", or any mark you like) in between two words as a placeholder.  
+          - Example: write `"I want to _ water."` or `"I want to ... water."` for `"I want to [buy a bottle of] water."`
+        - Your responses will be stored anonymously.
+        - You will recieve a code at the end for claiming a gift card.
         """
     )
     
