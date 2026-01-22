@@ -12,6 +12,9 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import streamlit.components.v1 as components
 
+# Turn this to False once everything works
+DEBUG = True
+
 # --------------------------------------
 # Page configuration
 # --------------------------------------
@@ -125,10 +128,9 @@ def render_limited_audio(audio_bytes: bytes, element_id: str, max_plays: int = 2
 # --------------------------------------
 
 
-@st.cache_resource
 def get_audio_index():
     """
-    Returns a dict mapping (folder_key, filename) -> file_id
+    Build a mapping: (folder_key, filename) -> file_id
     where folder_key is 'sentences' or 'isolated_words'.
     """
     service = get_drive_service()
@@ -147,6 +149,7 @@ def get_audio_index():
             "mimeType contains 'audio/' and trashed = false"
         )
         page_token = None
+        total_for_folder = 0
 
         while True:
             results = (
@@ -159,18 +162,27 @@ def get_audio_index():
                 )
                 .execute()
             )
-            for f in results.get("files", []):
+            files = results.get("files", [])
+            for f in files:
                 name = f["name"]
                 index[(folder_key, name)] = f["id"]
+                total_for_folder += 1
 
             page_token = results.get("nextPageToken")
             if not page_token:
                 break
 
+        if DEBUG:
+            st.write(f"DEBUG: Found {total_for_folder} audio files in folder '{folder_key}'")
+
+    if DEBUG:
+        sample_keys = list(index.keys())[:10]
+        st.write("DEBUG: Sample audio_index keys (folder, filename):")
+        st.write(sample_keys)
+
     return index
 
 
-@st.cache_resource
 def get_main_items():
     """
     Reads meta_data.csv from Drive, uses column 'current_path' for order,
@@ -178,8 +190,8 @@ def get_main_items():
 
         { "item_1": {"audio_id": current_path, "drive_file_id": file_id}, ... }
 
-    where current_path is something like 'sentences\\foo.wav' or 'isolated_words\\bar.wav'
-    in the CSV. We normalize backslashes to forward slashes.
+    where current_path is like 'sentences\\M03_Session2_179.wav' or 'isolated_words\\M09_B1_UW27_M8.wav' in the CSV.
+    We normalize backslashes to forward slashes.
     """
     drive_cfg = st.secrets["drive"]
     meta_file_id = drive_cfg["meta_data_file_id"]
@@ -192,6 +204,7 @@ def get_main_items():
     audio_index = get_audio_index()
 
     main_items = {}
+    debug_rows = []
     counter = 1
 
     for row in reader:
@@ -199,7 +212,7 @@ def get_main_items():
         if not raw_path:
             continue
 
-        # 🔧 Normalize Windows-style backslashes to POSIX-style slashes
+        # Normalize Windows-style backslashes to POSIX-style slashes
         normalized_path = raw_path.replace("\\", "/")
 
         # Use PurePosixPath so it's consistent regardless of OS
@@ -207,25 +220,40 @@ def get_main_items():
         parts = p.parts
 
         if len(parts) >= 2:
-            folder_key = parts[0]          # 'sentences' or 'isolated_words'
-            filename = p.name              # e.g., 'M03_Session2_179.wav'
+            folder_key = parts[0]   # 'sentences' or 'isolated_words'
+            filename = p.name       # e.g., 'M03_Session2_179.wav'
         else:
-            # If something weird, skip this row
+            # Something is off with the path; skip
             continue
 
         file_id = audio_index.get((folder_key, filename))
+
+        debug_rows.append({
+            "raw_path": raw_path,
+            "normalized_path": normalized_path,
+            "folder_key": folder_key,
+            "filename": filename,
+            "found": bool(file_id),
+        })
+
         if not file_id:
-            # Optional: show a warning in the app for debugging
-            # st.warning(f"No Drive file found for {normalized_path} (folder={folder_key}, filename={filename})")
+            # No match in Drive for this row; skip for now
             continue
 
         page_name = f"item_{counter}"
         main_items[page_name] = {
-            # Store the *normalized* path as audio_id, so it's consistent in your sheet
+            # Store the normalized path as audio_id in your transcript sheet
             "audio_id": normalized_path,
             "drive_file_id": file_id,
         }
         counter += 1
+
+    if DEBUG:
+        st.write(f"DEBUG: meta_data.csv rows processed: {len(debug_rows)}")
+        st.write(f"DEBUG: main_items created (matched rows): {len(main_items)}")
+        st.write("DEBUG: First 10 meta_data rows with match info:")
+        # This will display a small table with raw_path, normalized_path, filename, found=True/False
+        st.table(debug_rows[:10])
 
     return main_items
 
@@ -539,6 +567,13 @@ def render_instructions():
         """
     )
 
+    if DEBUG:
+        st.write("DEBUG: Number of main_items:", total_items)
+        first_keys = list(main_items.keys())[:5]
+        st.write("DEBUG: First 5 item page names:", first_keys)
+        st.write("DEBUG: First 5 audio_ids:")
+        st.write([main_items[k]["audio_id"] for k in first_keys])
+    
     if st.button("Next", key="instructions_next"):
         go_next_page()
 
