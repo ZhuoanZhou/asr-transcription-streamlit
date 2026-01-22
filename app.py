@@ -302,6 +302,25 @@ def go_next_page():
         st.session_state.page_index += 1
         st.rerun()
 
+def scroll_to_top():
+    """Inject JS to scroll the outer page to the top on each rerun."""
+    components.html(
+        """
+        <script>
+            if (window && window.parent) {
+                try {
+                    window.parent.scrollTo(0, 0);
+                } catch (e) {
+                    window.scrollTo(0, 0);
+                }
+            } else {
+                window.scrollTo(0, 0);
+            }
+        </script>
+        """,
+        height=0,
+    )
+    
 
 # --------------------------------------
 # Page render functions
@@ -661,6 +680,9 @@ def render_thank_you():
 # Main router
 # --------------------------------------
 def main():
+    # Always scroll to top on rerun / page change
+    scroll_to_top()
+    
     pages = st.session_state.pages
     current_page = pages[st.session_state.page_index]
     main_items = st.session_state.main_items
