@@ -178,9 +178,9 @@ def get_main_items():
 
         { "item_1": {"audio_id": current_path, "drive_file_id": file_id}, ... }
 
-    where current_path is something like 'sentences/foo.wav' or 'isolated_words/bar.wav'.
+    where current_path is something like 'sentences\\foo.wav' or 'isolated_words\\bar.wav'
+    in the CSV. We normalize backslashes to forward slashes.
     """
-    service = get_drive_service()
     drive_cfg = st.secrets["drive"]
     meta_file_id = drive_cfg["meta_data_file_id"]
 
@@ -195,33 +195,34 @@ def get_main_items():
     counter = 1
 
     for row in reader:
-        current_path = (row.get("current_path") or "").strip()
-        if not current_path:
+        raw_path = (row.get("current_path") or "").strip()
+        if not raw_path:
             continue
 
-        p = PurePosixPath(current_path)
+        # 🔧 Normalize Windows-style backslashes to POSIX-style slashes
+        normalized_path = raw_path.replace("\\", "/")
+
+        # Use PurePosixPath so it's consistent regardless of OS
+        p = PurePosixPath(normalized_path)
         parts = p.parts
 
         if len(parts) >= 2:
-            folder_key = parts[0]  # 'sentences' or 'isolated_words'
-            filename = parts[-1]
-        elif len(parts) == 1:
-            # No folder in path; assume sentences by default
-            folder_key = "sentences"
-            filename = parts[0]
+            folder_key = parts[0]          # 'sentences' or 'isolated_words'
+            filename = p.name              # e.g., 'M03_Session2_179.wav'
         else:
+            # If something weird, skip this row
             continue
 
         file_id = audio_index.get((folder_key, filename))
         if not file_id:
-            # If there's a mismatch, you can log a warning in the UI if needed.
-            # For now, just skip.
+            # Optional: show a warning in the app for debugging
+            # st.warning(f"No Drive file found for {normalized_path} (folder={folder_key}, filename={filename})")
             continue
 
         page_name = f"item_{counter}"
         main_items[page_name] = {
-            # We use the current_path as the audio_id stored in the transcript sheet
-            "audio_id": current_path,
+            # Store the *normalized* path as audio_id, so it's consistent in your sheet
+            "audio_id": normalized_path,
             "drive_file_id": file_id,
         }
         counter += 1
