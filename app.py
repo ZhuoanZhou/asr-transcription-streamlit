@@ -13,7 +13,7 @@ from googleapiclient.http import MediaIoBaseDownload
 import streamlit.components.v1 as components
 
 # Turn this to False once everything works
-DEBUG = True
+DEBUG = False
 
 # --------------------------------------
 # Page configuration
