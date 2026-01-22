@@ -646,7 +646,6 @@ def render_item_page(page_name: str, item_config: dict):
 def render_thank_you():
     st.title("Thank you!")
     st.markdown(
-        arkdown(
         """
         Thank you for participating in this study.  
         Your responses have been recorded.
