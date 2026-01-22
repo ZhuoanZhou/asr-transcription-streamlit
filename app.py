@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 import uuid
 import io
 import base64
+import csv
+from pathlib import PurePosixPath
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -15,79 +17,10 @@ import streamlit.components.v1 as components
 # --------------------------------------
 st.set_page_config(page_title="Dysarthric Speech Transcription Study", page_icon="🎧")
 
-PAGES = [
-    "intro",          # Page 1
-    "screening",      # Page 2
-    "headphone",      # Page 3
-    "instructions",   # Page 4
-    "item_1",         # Page 5
-    "item_2",         # Page 6
-    "item_3",         # Page 7
-    "item_4",         # Page 8
-    "item_5",         # Page 9
-    "thank_you",      # Page 10
-]
+# These are the fixed pages; the item pages will be added dynamically
+BASE_PAGES = ["intro", "screening", "headphone", "instructions"]
+FINAL_PAGE = "thank_you"
 
-# --------------------------------------
-# Audio configuration (Google Drive)
-# --------------------------------------
-# TODO: Fill in the real Drive file IDs below.
-# The file ID is the part between /d/ and /view in the Google Drive URL.
-#
-# Example:
-#   URL: https://drive.google.com/file/d/1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe/view?usp=drive_link
-#   ID:  1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe
-
-HEADPHONE_ITEMS = [
-    {
-        "id": "hp1",
-        "label": "Headphone check item 1",
-        "drive_file_id": "14rLe5MuNfyjUbZJ5_6iBGa8PGSXKgsWO",
-        "options": ["feed", "seed"],
-    },
-    {
-        "id": "hp2",
-        "label": "Headphone check item 2",
-        "drive_file_id": "1lh3QSGNc58oef5HTYNh1Q0C7vP6TRydo",
-        "options": ["lift", "left"],
-    },
-    {
-        "id": "hp3",
-        "label": "Headphone check item 3",
-        "drive_file_id": "12Qyd7Td5hkESJ6ehbfn8ApAoLNozfSHU",
-        "options": ["storm", "swarm"],
-    },
-    {
-        "id": "hp4",
-        "label": "Headphone check item 4",
-        "drive_file_id": "1YL5KBMBHc0H3afH4A8mRVzdn-CKlPOLm",
-        "options": ["hair", "here"],
-    },
-]
-
-MAIN_ITEMS = {
-    # Page name -> config
-    "item_1": {
-        "audio_id": "sentence_1",
-        "drive_file_id": "1ROTCqC5n3JCX9PgFvbjp0cd8sHHO6ETe",
-    },
-    "item_2": {
-        "audio_id": "sentence_2",
-        "drive_file_id": "1oNWptEpkTXEw7j1o0uhDPnin_Ndvlfco",
-    },
-    "item_3": {
-        "audio_id": "sentence_3",
-        "drive_file_id": "1ucOAJ1Zh-UVPbiWh_W41ZW172KA8uCvF",
-    },
-    "item_4": {
-        "audio_id": "sentence_4",
-        "drive_file_id": "1o2rFP2S3NpjU6geyFe_Ezd9282qsmvyv",
-    },
-    "item_5": {
-        "audio_id": "sentence_5",
-        "drive_file_id": "1yO4DE-_u6JRFMLyY9BrCyJsk9f-K7h_y",
-    },
-}
 
 # --------------------------------------
 # Google Sheets helpers
@@ -136,8 +69,8 @@ def get_drive_service():
     return service
 
 
-def load_audio_from_drive(file_id: str) -> bytes:
-    """Download an audio file from Google Drive and return raw bytes."""
+def download_file_bytes(file_id: str) -> bytes:
+    """Download a file from Google Drive and return its raw bytes."""
     service = get_drive_service()
     request = service.files().get_media(fileId=file_id)
 
@@ -188,11 +121,150 @@ def render_limited_audio(audio_bytes: bytes, element_id: str, max_plays: int = 2
 
 
 # --------------------------------------
-# Session state initialization
+# Build audio index from Drive + meta_data.csv
 # --------------------------------------
-if "page_index" not in st.session_state:
-    st.session_state.page_index = 0  # start at "intro"
 
+
+@st.cache_resource
+def get_audio_index():
+    """
+    Returns a dict mapping (folder_key, filename) -> file_id
+    where folder_key is 'sentences' or 'isolated_words'.
+    """
+    service = get_drive_service()
+    drive_cfg = st.secrets["drive"]
+
+    folder_ids = {
+        "sentences": drive_cfg["sentences_folder_id"],
+        "isolated_words": drive_cfg["isolated_words_folder_id"],
+    }
+
+    index = {}
+
+    for folder_key, folder_id in folder_ids.items():
+        query = (
+            f"'{folder_id}' in parents and "
+            "mimeType contains 'audio/' and trashed = false"
+        )
+        page_token = None
+
+        while True:
+            results = (
+                service.files()
+                .list(
+                    q=query,
+                    fields="files(id, name), nextPageToken",
+                    pageSize=1000,
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+            for f in results.get("files", []):
+                name = f["name"]
+                index[(folder_key, name)] = f["id"]
+
+            page_token = results.get("nextPageToken")
+            if not page_token:
+                break
+
+    return index
+
+
+@st.cache_resource
+def get_main_items():
+    """
+    Reads meta_data.csv from Drive, uses column 'current_path' for order,
+    and returns a dict:
+
+        { "item_1": {"audio_id": current_path, "drive_file_id": file_id}, ... }
+
+    where current_path is something like 'sentences/foo.wav' or 'isolated_words/bar.wav'.
+    """
+    service = get_drive_service()
+    drive_cfg = st.secrets["drive"]
+    meta_file_id = drive_cfg["meta_data_file_id"]
+
+    # Download meta_data.csv
+    csv_bytes = download_file_bytes(meta_file_id)
+    csv_text = csv_bytes.decode("utf-8", errors="replace")
+
+    reader = csv.DictReader(io.StringIO(csv_text))
+    audio_index = get_audio_index()
+
+    main_items = {}
+    counter = 1
+
+    for row in reader:
+        current_path = (row.get("current_path") or "").strip()
+        if not current_path:
+            continue
+
+        p = PurePosixPath(current_path)
+        parts = p.parts
+
+        if len(parts) >= 2:
+            folder_key = parts[0]  # 'sentences' or 'isolated_words'
+            filename = parts[-1]
+        elif len(parts) == 1:
+            # No folder in path; assume sentences by default
+            folder_key = "sentences"
+            filename = parts[0]
+        else:
+            continue
+
+        file_id = audio_index.get((folder_key, filename))
+        if not file_id:
+            # If there's a mismatch, you can log a warning in the UI if needed.
+            # For now, just skip.
+            continue
+
+        page_name = f"item_{counter}"
+        main_items[page_name] = {
+            # We use the current_path as the audio_id stored in the transcript sheet
+            "audio_id": current_path,
+            "drive_file_id": file_id,
+        }
+        counter += 1
+
+    return main_items
+
+
+# --------------------------------------
+# Headphone items (still manual)
+# --------------------------------------
+
+
+HEADPHONE_ITEMS = [
+    {
+        "id": "hp1",
+        "label": "Headphone check item 1",
+        "drive_file_id": "14rLe5MuNfyjUbZJ5_6iBGa8PGSXKgsWO",
+        "options": ["feed", "seed"],
+    },
+    {
+        "id": "hp2",
+        "label": "Headphone check item 2",
+        "drive_file_id": "1lh3QSGNc58oef5HTYNh1Q0C7vP6TRydo",
+        "options": ["lift", "left"],
+    },
+    {
+        "id": "hp3",
+        "label": "Headphone check item 3",
+        "drive_file_id": "12Qyd7Td5hkESJ6ehbfn8ApAoLNozfSHU",
+        "options": ["storm", "swarm"],
+    },
+    {
+        "id": "hp4",
+        "label": "Headphone check item 4",
+        "drive_file_id": "1YL5KBMBHc0H3afH4A8mRVzdn-CKlPOLm",
+        "options": ["hair", "here"],
+    },
+]
+
+
+# --------------------------------------
+# Session state initialization & flow
+# --------------------------------------
 if "participant_id" not in st.session_state:
     st.session_state.participant_id = str(uuid.uuid4())[:8]
 
@@ -210,10 +282,23 @@ if "item_audio_shown" not in st.session_state:
     # per-item flag for showing audio widget
     st.session_state.item_audio_shown = {}
 
+if "main_items" not in st.session_state:
+    # Build dynamic items from meta_data.csv
+    st.session_state.main_items = get_main_items()
+
+if "pages" not in st.session_state:
+    # Build dynamic page list: intro -> screening -> headphone -> instructions -> items -> thank_you
+    item_pages = list(st.session_state.main_items.keys())
+    st.session_state.pages = BASE_PAGES + item_pages + [FINAL_PAGE]
+
+if "page_index" not in st.session_state:
+    st.session_state.page_index = 0  # start at "intro"
+
 
 def go_next_page():
     """Move to the next page in the flow (no going back)."""
-    if st.session_state.page_index < len(PAGES) - 1:
+    pages = st.session_state.pages
+    if st.session_state.page_index < len(pages) - 1:
         st.session_state.page_index += 1
         st.rerun()
 
@@ -235,12 +320,14 @@ def render_intro():
         - Answer a few brief screening questions  
         - Complete a short headphone/speaker check  
         - Read instructions about how to transcribe  
-        - Transcribe **5 short spoken sentences**, one at a time
+        - Transcribe a series of **short spoken items** (sentences or phrases), one at a time
 
-        Your responses will be stored anonymously using a random participant ID.
+        Your responses will be stored anonymously.
         Please follow the instructions carefully and answer honestly.
         You may pause and continue the study at any time.
-        Please keep the web page open and do not leave for more than 12 hours.
+        Please keep the web page open and do not leave for more than 12 hours. Otherwise, you will need to start over.
+        
+        You will recieve a code at the end. Please copy and paste the code in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card.
         """
     )
 
@@ -341,7 +428,7 @@ def render_headphone_check():
             options = item["options"]
 
             try:
-                audio_bytes = load_audio_from_drive(file_id)
+                audio_bytes = download_file_bytes(file_id)
                 render_limited_audio(
                     audio_bytes,
                     element_id=f"headphone_{item['id']}",
@@ -399,20 +486,23 @@ def render_headphone_check():
 def render_instructions():
     st.header("Instructions")
 
+    main_items = st.session_state.main_items
+    total_items = len(main_items)
+
     st.markdown(
-        """
-        You will transcribe **5 short spoken sentences**, one at a time.
+        f"""
+        You will transcribe **{total_items} short spoken items**, one at a time.
 
         For each item:
 
         1. Click **Start & show audio** to begin.  
-           - Your time will start from that moment.  
-        2. Click **Play** in the audio player to hear the sentence. Please wait until the audio stops.
+           - Your time will start from that moment (as a proxy for your first listen).  
+        2. Click **Play** in the audio player to hear the item.  
         3. After the first listen, type exactly what you think the speaker said in the text box **"First transcript"**.  
         4. You may then listen **one more time** (the player allows at most two plays).  
         5. After the second listen, you may edit or correct your transcript in the text box **"Second transcript"** if you notice new words or corrections.  
            - If not, you can just copy and paste the first transcript.  
-        6. When finished, click **"Save & Next"** to move to the next sentence.  
+        6. When finished, click **"Save & Next"** to move to the next item.  
            - Both transcripts will be saved in the Google Sheet.
 
         **Important notes:**
@@ -436,6 +526,7 @@ def render_instructions():
 def render_item_page(page_name: str, item_config: dict):
     transcript_ws = get_worksheet("transcript")
     participant_id = st.session_state.participant_id
+    main_items = st.session_state.main_items
 
     # Make sure we have flags for this item
     if page_name not in st.session_state.item_audio_shown:
@@ -443,23 +534,25 @@ def render_item_page(page_name: str, item_config: dict):
 
     st.header("Transcription Task")
 
-    # Determine which sentence number (1–5)
-    idx = list(MAIN_ITEMS.keys()).index(page_name) + 1
-    total = len(MAIN_ITEMS)
+    # Determine which item number (1..N)
+    keys = list(main_items.keys())
+    idx = keys.index(page_name) + 1
+    total = len(main_items)
 
-    st.subheader(f"Sentence {idx} of {total}")
+    st.subheader(f"Item {idx} of {total}")
 
     st.markdown(
         """
-        - Click **Start & show audio** when you are ready.  
+        - Click **Start & show audio** when you are ready.
           Your time will start from that moment.  
-        - You may listen to this sentence **up to two times**.  
+        - You may listen to this item **up to two times**.  
         - Then provide your first and second transcripts below.
+        - Please wait until the audio stops before starting your second playback.
         """
     )
 
     file_id = item_config["drive_file_id"]
-    audio_id = item_config["audio_id"]
+    audio_id = item_config["audio_id"]  # this is current_path from meta_data
 
     # Button to start timing + reveal audio
     if not st.session_state.item_audio_shown[page_name]:
@@ -473,14 +566,14 @@ def render_item_page(page_name: str, item_config: dict):
     # If audio is shown, render the audio player
     if st.session_state.item_audio_shown[page_name]:
         try:
-            audio_bytes = load_audio_from_drive(file_id)
+            audio_bytes = download_file_bytes(file_id)
             render_limited_audio(
                 audio_bytes,
                 element_id=f"main_{page_name}",
                 max_plays=2,
             )
         except Exception as e:
-            st.error("Could not load the audio file for this sentence.")
+            st.error("Could not load the audio file for this item.")
             st.exception(e)
 
     st.write("---")
@@ -526,7 +619,7 @@ def render_item_page(page_name: str, item_config: dict):
         row = [
             timestamp,                     # timestamp_utc
             participant_id,                # participant_id
-            audio_id,                      # audio_id
+            audio_id,                      # audio_id (current_path)
             start_time.isoformat(),        # start_time
             end_time.isoformat(),          # end_time
             round(duration_sec, 3),        # duration_sec
@@ -553,6 +646,7 @@ def render_item_page(page_name: str, item_config: dict):
 def render_thank_you():
     st.title("Thank you!")
     st.markdown(
+        arkdown(
         """
         Thank you for participating in this study.  
         Your responses have been recorded.
@@ -568,7 +662,9 @@ def render_thank_you():
 # Main router
 # --------------------------------------
 def main():
-    current_page = PAGES[st.session_state.page_index]
+    pages = st.session_state.pages
+    current_page = pages[st.session_state.page_index]
+    main_items = st.session_state.main_items
 
     if current_page == "intro":
         render_intro()
@@ -578,10 +674,10 @@ def main():
         render_headphone_check()
     elif current_page == "instructions":
         render_instructions()
-    elif current_page in MAIN_ITEMS:
-        render_item_page(current_page, MAIN_ITEMS[current_page])
-    elif current_page == "thank_you":
+    elif current_page == FINAL_PAGE:
         render_thank_you()
+    elif current_page in main_items:
+        render_item_page(current_page, main_items[current_page])
     else:
         st.error("Unknown page state. Please refresh the app.")
 
