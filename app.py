@@ -22,8 +22,9 @@ def inject_compact_css():
     st.markdown(
         """
         <style>
+        /* Keep a comfortable top padding so the Streamlit header doesn't cover titles */
         .block-container {
-            padding-top: 0.5rem;
+            padding-top: 2.5rem;   /* was 0.5rem; this is closer to Streamlit default */
             padding-bottom: 0.5rem;
         }
         h1, h2, h3, h4, h5, h6 {
