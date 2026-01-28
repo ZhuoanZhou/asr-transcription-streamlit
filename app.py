@@ -17,9 +17,38 @@ import streamlit.components.v1 as components
 # --------------------------------------
 st.set_page_config(page_title="Dysarthric Speech Transcription Study", page_icon="🎧")
 
-# These are the fixed pages; the item pages will be added dynamically
-BASE_PAGES = ["intro", "screening", "headphone", "instructions"]
+# Compact CSS for smaller screens
+def inject_compact_css():
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            margin-bottom: 0.4rem;
+        }
+        p, li {
+            margin-bottom: 0.25rem !important;
+            line-height: 1.25 !important;
+        }
+        textarea {
+            line-height: 1.2 !important;
+        }
+        .stButton>button {
+            margin-top: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+LOGIN_PAGE = "login"
 FINAL_PAGE = "thank_you"
+# Fixed pages; item pages are added dynamically later
+BASE_PAGES = [LOGIN_PAGE, "intro", "screening", "headphone", "instructions"]
 
 
 # --------------------------------------
@@ -52,6 +81,48 @@ def get_worksheet(which: str):
     return sh.sheet1
 
 
+@st.cache_data
+def get_existing_participant_ids():
+    """
+    Return a set of all participant_ids present in survey and transcript sheets.
+    """
+    ids = set()
+
+    # survey sheet
+    try:
+        survey_ws = get_worksheet("survey")
+        survey_rows = survey_ws.get_all_values()
+        # Columns: timestamp_utc, participant_id, ...
+        for r in survey_rows[1:]:
+            if len(r) > 1 and r[1].strip():
+                ids.add(r[1].strip())
+    except Exception:
+        pass
+
+    # transcript sheet
+    try:
+        transcript_ws = get_worksheet("transcript")
+        trans_rows = transcript_ws.get_all_values()
+        # Columns: timestamp_utc, participant_id, audio_id, ...
+        for r in trans_rows[1:]:
+            if len(r) > 1 and r[1].strip():
+                ids.add(r[1].strip())
+    except Exception:
+        pass
+
+    return ids
+
+
+def generate_unique_participant_id() -> str:
+    """Generate a 10-character ID not already used in Sheets."""
+    existing_ids = get_existing_participant_ids()
+    while True:
+        # uuid4().hex is 32 hex chars with no hyphens; take first 10
+        candidate = uuid.uuid4().hex[:10]
+        if candidate not in existing_ids:
+            return candidate
+
+
 # --------------------------------------
 # Google Drive helpers
 # --------------------------------------
@@ -79,7 +150,7 @@ def download_file_bytes(file_id: str) -> bytes:
 
     done = False
     while not done:
-        status, done = downloader.next_chunk()
+        _, done = downloader.next_chunk()
 
     fh.seek(0)
     return fh.read()
@@ -125,6 +196,7 @@ def render_limited_audio(audio_bytes: bytes, element_id: str, max_plays: int = 2
 # --------------------------------------
 
 
+@st.cache_resource
 def get_audio_index():
     """
     Build a mapping: (folder_key, filename) -> file_id
@@ -146,7 +218,6 @@ def get_audio_index():
             "mimeType contains 'audio/' and trashed = false"
         )
         page_token = None
-        total_for_folder = 0
 
         while True:
             results = (
@@ -163,7 +234,6 @@ def get_audio_index():
             for f in files:
                 name = f["name"]
                 index[(folder_key, name)] = f["id"]
-                total_for_folder += 1
 
             page_token = results.get("nextPageToken")
             if not page_token:
@@ -172,15 +242,19 @@ def get_audio_index():
     return index
 
 
+@st.cache_resource
 def get_main_items():
     """
     Reads meta_data.csv from Drive, uses column 'current_path' for order,
     and returns a dict:
 
-        { "item_1": {"audio_id": current_path, "drive_file_id": file_id}, ... }
+        {
+            "item_1": {"audio_id": normalized_path, "drive_file_id": file_id},
+            ...
+        }
 
-    where current_path is like 'sentences\\M03_Session2_179.wav' or 'isolated_words\\M09_B1_UW27_M8.wav' in the CSV.
-    We normalize backslashes to forward slashes.
+    where current_path is like 'sentences\\M03_Session2_179.wav'
+    or 'isolated_words\\M09_B1_UW27_M8.wav'.
     """
     drive_cfg = st.secrets["drive"]
     meta_file_id = drive_cfg["meta_data_file_id"]
@@ -203,7 +277,6 @@ def get_main_items():
         # Normalize Windows-style backslashes to POSIX-style slashes
         normalized_path = raw_path.replace("\\", "/")
 
-        # Use PurePosixPath so it's consistent regardless of OS
         p = PurePosixPath(normalized_path)
         parts = p.parts
 
@@ -211,29 +284,25 @@ def get_main_items():
             folder_key = parts[0]   # 'sentences' or 'isolated_words'
             filename = p.name       # e.g., 'M03_Session2_179.wav'
         else:
-            # Something is off with the path; skip
             continue
 
         file_id = audio_index.get((folder_key, filename))
-
         if not file_id:
-            # No match in Drive for this row; skip for now
+            # Skip if no matching file in Drive index
             continue
 
         page_name = f"item_{counter}"
         main_items[page_name] = {
-            # Store the normalized path as audio_id in your transcript sheet
-            "audio_id": normalized_path,
+            "audio_id": normalized_path,  # stored in transcript sheet
             "drive_file_id": file_id,
         }
         counter += 1
-
 
     return main_items
 
 
 # --------------------------------------
-# Headphone items (still manual)
+# Headphone items (manual for now)
 # --------------------------------------
 
 
@@ -269,7 +338,11 @@ HEADPHONE_ITEMS = [
 # Session state initialization & flow
 # --------------------------------------
 if "participant_id" not in st.session_state:
-    st.session_state.participant_id = str(uuid.uuid4())[:8]
+    # Will be overwritten when they generate or enter an ID
+    st.session_state.participant_id = ""
+
+if "new_id_ready" not in st.session_state:
+    st.session_state.new_id_ready = False  # used for the new-participant flow
 
 if "screening_answers" not in st.session_state:
     st.session_state.screening_answers = None  # will store dict
@@ -290,12 +363,12 @@ if "main_items" not in st.session_state:
     st.session_state.main_items = get_main_items()
 
 if "pages" not in st.session_state:
-    # Build dynamic page list: intro -> screening -> headphone -> instructions -> items -> thank_you
+    # Build dynamic page list: login -> intro -> screening -> headphone -> instructions -> items -> thank_you
     item_pages = list(st.session_state.main_items.keys())
     st.session_state.pages = BASE_PAGES + item_pages + [FINAL_PAGE]
 
 if "page_index" not in st.session_state:
-    st.session_state.page_index = 0  # start at "intro"
+    st.session_state.page_index = 0  # start at "login"
 
 
 def go_next_page():
@@ -305,31 +378,150 @@ def go_next_page():
         st.session_state.page_index += 1
         st.rerun()
 
-def scroll_to_top():
-    """Inject JS to scroll the outer page to the top on each rerun."""
-    components.html(
-        """
-        <script>
-            if (window && window.parent) {
-                try {
-                    window.parent.scrollTo(0, 0);
-                } catch (e) {
-                    window.scrollTo(0, 0);
-                }
-            } else {
-                window.scrollTo(0, 0);
-            }
-        </script>
-        """,
-        height=0,
-    )
-    
 
 # --------------------------------------
-# Page render functions
+# Login / resume page
+# --------------------------------------
+def render_login():
+    st.title("Dysarthric Speech Transcription Study")
+    st.subheader("Participant Login / Resume")
+
+    st.markdown(
+        """
+        Please choose how you would like to proceed:
+
+        - If this is your **first time**, we will create a new participant ID for you.  
+        - If you are **returning**, you can enter your existing participant ID to resume from where you left off.
+        """
+    )
+
+    mode = st.radio(
+        "How would you like to proceed?",
+        ["I am new here", "I already have a participant ID"],
+        key="login_mode",
+    )
+
+    pages = st.session_state.pages
+    main_items = st.session_state.main_items
+
+    # --- New participant flow ---
+    if mode == "I am new here":
+        if not st.session_state.new_id_ready:
+            if st.button("Generate my participant ID", key="btn_generate_id"):
+                # Generate new unique ID and reset per-participant state
+                new_id = generate_unique_participant_id()
+                st.session_state.participant_id = new_id
+                st.session_state.screening_answers = None
+                st.session_state.survey_saved = False
+                st.session_state.item_start_times = {}
+                st.session_state.item_audio_shown = {}
+                st.session_state.new_id_ready = True
+
+                # Immediately create a stub row in survey sheet:
+                # [timestamp_utc, participant_id, q1..q6, hp1..hp4]
+                # We'll fill the rest later.
+                try:
+                    survey_ws = get_worksheet("survey")
+                    stub_row = ["", new_id] + [""] * 10  # total 12 columns
+                    survey_ws.append_row(stub_row)
+                except Exception as e:
+                    st.error("Error creating a record for your participant ID in the survey sheet.")
+                    st.exception(e)
+
+                st.rerun()
+        else:
+            # ID already generated; show it clearly
+            pid = st.session_state.participant_id
+            st.success(
+                f"Your participant ID is: `{pid}`\n\n"
+                "Please write this down or take a screenshot. "
+                "You will need this ID if you come back later."
+            )
+            if st.button("Start the study", key="btn_start_study"):
+                # Jump to intro
+                if "intro" in pages:
+                    st.session_state.page_index = pages.index("intro")
+                else:
+                    st.session_state.page_index = 0
+                st.session_state.new_id_ready = False
+                st.rerun()
+
+    # --- Returning participant flow ---
+    else:
+        pid = st.text_input(
+            "Enter your participant ID exactly as given before:",
+            key="login_pid",
+        )
+        if st.button("Resume with this ID", key="btn_resume"):
+            pid = pid.strip()
+            if not pid:
+                st.error("Please enter your participant ID.")
+                return
+
+            st.session_state.participant_id = pid
+
+            try:
+                survey_ws = get_worksheet("survey")
+                transcript_ws = get_worksheet("transcript")
+
+                survey_rows = survey_ws.get_all_values()
+                # Columns: timestamp_utc, participant_id, q1..q6, hp1..hp4
+                has_survey = any(
+                    len(r) > 1 and r[1] == pid for r in survey_rows[1:]
+                )
+
+                trans_rows = transcript_ws.get_all_values()
+                # Columns: timestamp_utc, participant_id, audio_id, ...
+                completed_audio_ids = set()
+                for r in trans_rows[1:]:
+                    if len(r) > 2 and r[1] == pid:
+                        completed_audio_ids.add(r[2])
+
+                st.session_state.survey_saved = has_survey
+                st.session_state.screening_answers = None  # not needed later
+
+                pages = st.session_state.pages
+                item_pages = [p for p in pages if p in main_items]
+
+                # Decide next page
+                if not has_survey:
+                    next_page = "intro"
+                else:
+                    # Find the first audio_id not yet completed
+                    next_audio_page = None
+                    for p in item_pages:
+                        aid = main_items[p]["audio_id"]
+                        if aid not in completed_audio_ids:
+                            next_audio_page = p
+                            break
+
+                    if next_audio_page is None:
+                        # All items completed
+                        next_page = FINAL_PAGE
+                    else:
+                        next_page = next_audio_page
+
+                if next_page not in pages:
+                    st.error(
+                        "Could not determine where to resume. "
+                        "Please double-check your participant ID or start as a new participant."
+                    )
+                else:
+                    st.success(f"Resuming participant `{pid}`.")
+                    st.session_state.page_index = pages.index(next_page)
+                    st.session_state.new_id_ready = False
+                    st.rerun()
+
+            except Exception as e:
+                st.error("Error while trying to resume from your previous progress.")
+                st.exception(e)
+
+
+# --------------------------------------
+# Other page render functions
 # --------------------------------------
 def render_intro():
-    st.title("Dysarthric Speech Transcription Study")
+    st.header("Introduction")
 
     st.markdown(
         """
@@ -346,10 +538,9 @@ def render_intro():
 
         Your responses will be stored anonymously.
         Please follow the instructions carefully and answer honestly.
-        You may pause and continue the study at any time.
-        Please keep the web page open and do not leave for more than 12 hours. Otherwise, you will need to start over.
+        You may leave and continue the study at any time using your participant ID.
         
-        You will recieve a code at the end. Please copy and paste the code in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card.
+        You will copy and paste the code in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card after completing the study. (Note: We need to discuss how to modify this.)
         """
     )
 
@@ -407,7 +598,6 @@ def render_screening():
             st.error("Please answer all questions (gender cannot be empty).")
             return
 
-        # Store screening answers in session to save later together with headphone answers
         st.session_state.screening_answers = {
             "q1": q1,
             "q2": q2,
@@ -434,7 +624,7 @@ def render_headphone_check():
         """
     )
 
-    if st.session_state.screening_answers is None:
+    if st.session_state.screening_answers is None and not st.session_state.survey_saved:
         st.error("Screening answers not found. Please restart the survey.")
         return
 
@@ -478,8 +668,8 @@ def render_headphone_check():
             p_id = st.session_state.participant_id
             s = st.session_state.screening_answers
 
-            # Columns: timestamp_utc, participant_id, q1..q6, hp1..hp4
-            row = [
+            # Full row: timestamp_utc, participant_id, q1..q6, hp1..hp4
+            full_row = [
                 timestamp,
                 p_id,
                 s["q1"],
@@ -495,7 +685,16 @@ def render_headphone_check():
             ]
 
             try:
-                survey_ws.append_row(row)
+                # Find existing stub row by participant_id in column 2
+                try:
+                    cell = survey_ws.find(p_id, in_column=2)
+                    row_idx = cell.row
+                    # Update the existing row with full data
+                    survey_ws.update(f"A{row_idx}:L{row_idx}", [full_row])
+                except Exception:
+                    # If not found for some reason, append as new row
+                    survey_ws.append_row(full_row)
+
                 st.session_state.survey_saved = True
             except Exception as e:
                 st.error("Error saving survey responses to Google Sheets.")
@@ -533,13 +732,11 @@ def render_instructions():
         - Many of the spoken sentences may be difficult to understand. It is OK not to be sure what you heard. 
         - Please listen carefully, follow the instructions, and write your best guess.
         - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing.  
-          Just leave a place holder (e.g. "...", "_", or any mark you like) in between two words as a placeholder.  
+          Just leave a place holder (e.g. "...", "_", "X" or any mark you like) in between two words as a placeholder.  
           - Example: write `"I want to _ water."` or `"I want to ... water."` for `"I want to [buy a bottle of] water."`
-        - Your responses will be stored anonymously.
-        - You will recieve a code at the end for claiming a gift card.
         """
     )
-    
+
     if st.button("Next", key="instructions_next"):
         go_next_page()
 
@@ -549,13 +746,11 @@ def render_item_page(page_name: str, item_config: dict):
     participant_id = st.session_state.participant_id
     main_items = st.session_state.main_items
 
-    # Make sure we have flags for this item
     if page_name not in st.session_state.item_audio_shown:
         st.session_state.item_audio_shown[page_name] = False
 
     st.header("Transcription Task")
 
-    # Determine which item number (1..N)
     keys = list(main_items.keys())
     idx = keys.index(page_name) + 1
     total = len(main_items)
@@ -573,7 +768,7 @@ def render_item_page(page_name: str, item_config: dict):
     )
 
     file_id = item_config["drive_file_id"]
-    audio_id = item_config["audio_id"]  # this is current_path from meta_data
+    audio_id = item_config["audio_id"]  # normalized current_path
 
     # Button to start timing + reveal audio
     if not st.session_state.item_audio_shown[page_name]:
@@ -584,7 +779,7 @@ def render_item_page(page_name: str, item_config: dict):
     else:
         st.info("Audio started. You may listen up to two times.")
 
-    # If audio is shown, render the audio player
+    # Render audio player
     if st.session_state.item_audio_shown[page_name]:
         try:
             audio_bytes = download_file_bytes(file_id)
@@ -616,12 +811,10 @@ def render_item_page(page_name: str, item_config: dict):
         submitted = st.form_submit_button("💾 Save & Next")
 
     if submitted:
-        # Ensure timing has started
         if page_name not in st.session_state.item_start_times:
             st.error("Please click 'Start & show audio' before submitting your transcripts.")
             return
 
-        # Minimal required: both transcripts non-empty
         if not first_transcript.strip():
             st.error("First transcript cannot be empty. Please type something you understood.")
             return
@@ -640,7 +833,7 @@ def render_item_page(page_name: str, item_config: dict):
         row = [
             timestamp,                     # timestamp_utc
             participant_id,                # participant_id
-            audio_id,                      # audio_id (current_path)
+            audio_id,                      # audio_id (normalized current_path)
             start_time.isoformat(),        # start_time
             end_time.isoformat(),          # end_time
             round(duration_sec, 3),        # duration_sec
@@ -655,12 +848,10 @@ def render_item_page(page_name: str, item_config: dict):
             st.exception(e)
             return
 
-        # Cleanup state for this item
         if page_name in st.session_state.item_start_times:
             del st.session_state.item_start_times[page_name]
         st.session_state.item_audio_shown[page_name] = False
 
-        # Move to next page (eventually leads to thank_you)
         go_next_page()
 
 
@@ -669,27 +860,29 @@ def render_thank_you():
     st.markdown(
         """
         Thank you for participating in this study.  
-        Your responses have been recorded.
-        Please copy and paste the code below in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card.
+        Your responses have been saved.
+        Please copy and paste your participant ID in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card.
 
-        You may now **close this window** after save the code.
+        You may now **close this window**.
         """
     )
-    st.write(f"Your code: `{st.session_state.participant_id}`")
+    if st.session_state.participant_id:
+        st.write(f"Your participant ID: `{st.session_state.participant_id}`")
 
 
 # --------------------------------------
 # Main router
 # --------------------------------------
 def main():
-    # Always scroll to top on rerun / page change
-    scroll_to_top()
-    
+    inject_compact_css()
+
     pages = st.session_state.pages
     current_page = pages[st.session_state.page_index]
     main_items = st.session_state.main_items
 
-    if current_page == "intro":
+    if current_page == LOGIN_PAGE:
+        render_login()
+    elif current_page == "intro":
         render_intro()
     elif current_page == "screening":
         render_screening()
