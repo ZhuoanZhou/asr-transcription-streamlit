@@ -17,35 +17,6 @@ import streamlit.components.v1 as components
 # --------------------------------------
 st.set_page_config(page_title="Dysarthric Speech Transcription Study", page_icon="🎧")
 
-# Compact CSS for smaller screens
-def inject_compact_css():
-    st.markdown(
-        """
-        <style>
-        /* Keep a comfortable top padding so the Streamlit header doesn't cover titles */
-        .block-container {
-            padding-top: 2.5rem;   /* was 0.5rem; this is closer to Streamlit default */
-            padding-bottom: 0.5rem;
-        }
-        h1, h2, h3, h4, h5, h6 {
-            margin-bottom: 0.4rem;
-        }
-        p, li {
-            margin-bottom: 0.25rem !important;
-            line-height: 1.25 !important;
-        }
-        textarea {
-            line-height: 1.2 !important;
-        }
-        .stButton>button {
-            margin-top: 0.25rem;
-            margin-bottom: 0.25rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
 LOGIN_PAGE = "login"
 FINAL_PAGE = "thank_you"
 # Fixed pages; item pages are added dynamically later
@@ -733,7 +704,7 @@ def render_instructions():
         - Many of the spoken sentences may be difficult to understand. It is OK not to be sure what you heard. 
         - Please listen carefully, follow the instructions, and write your best guess.
         - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing.  
-          Just leave a place holder (e.g. "...", "_", "X" or any mark you like) in between two words as a placeholder.  
+          Just leave a place holder (e.g. "...", "_", or any mark you like) in between two words as a placeholder.  
           - Example: write `"I want to _ water."` or `"I want to ... water."` for `"I want to [buy a bottle of] water."`
         """
     )
@@ -793,9 +764,15 @@ def render_item_page(page_name: str, item_config: dict):
             st.error("Could not load the audio file for this item.")
             st.exception(e)
 
-    st.write("---")
-
-    st.subheader("Transcription")
+    # Tight divider + small gap before transcription section
+    st.markdown(
+        "<hr style='margin-top:0.3rem; margin-bottom:0.3rem;'>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<h3 style='margin-top:0.1rem; margin-bottom:0.2rem;'>Transcription</h3>",
+        unsafe_allow_html=True,
+    )
 
     with st.form(f"transcription_form_{page_name}"):
         first_transcript = st.text_area(
@@ -861,12 +838,13 @@ def render_thank_you():
     st.markdown(
         """
         Thank you for participating in this study.  
-        Your responses have been saved.
+        Your responses have been recorded.
         Please copy and paste your participant ID in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card.
 
-        You may now **close this window**.
+        You may now **close this window** after save the code.
         """
     )
+    
     if st.session_state.participant_id:
         st.write(f"Your participant ID: `{st.session_state.participant_id}`")
 
@@ -875,8 +853,6 @@ def render_thank_you():
 # Main router
 # --------------------------------------
 def main():
-    inject_compact_css()
-
     pages = st.session_state.pages
     current_page = pages[st.session_state.page_index]
     main_items = st.session_state.main_items
