@@ -5,13 +5,11 @@ import uuid
 import io
 import base64
 import csv
-import time
 from pathlib import PurePosixPath
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from gspread.exceptions import APIError
 import streamlit.components.v1 as components
 
 # --------------------------------------
@@ -51,13 +49,11 @@ def get_gspread_client():
     return gc
 
 
+@st.cache_resource
 def get_worksheet(which: str):
     """
     which: 'survey' or 'transcript'
     Returns the first worksheet of the corresponding spreadsheet.
-
-    NOTE: We do NOT cache the Worksheet object to avoid concurrency/thread issues
-    across multiple Streamlit sessions.
     """
     gc = get_gspread_client()
     if which == "survey":
@@ -69,31 +65,6 @@ def get_worksheet(which: str):
 
     sh = gc.open_by_url(url)
     return sh.sheet1
-
-
-def append_row_with_retry(ws, row, retries=3, base_sleep=1.0):
-    """Append a row with simple exponential backoff on APIError."""
-    for attempt in range(retries):
-        try:
-            ws.append_row(row)
-            return True
-        except APIError as e:
-            # On last attempt, re-raise so caller can handle
-            if attempt == retries - 1:
-                raise
-            time.sleep(base_sleep * (2 ** attempt))
-
-
-def update_with_retry(ws, range_label, values, retries=3, base_sleep=1.0):
-    """Update a range with simple exponential backoff on APIError."""
-    for attempt in range(retries):
-        try:
-            ws.update(range_label, values)
-            return True
-        except APIError as e:
-            if attempt == retries - 1:
-                raise
-            time.sleep(base_sleep * (2 ** attempt))
 
 
 @st.cache_data
@@ -438,7 +409,7 @@ def render_login():
                 try:
                     survey_ws = get_worksheet("survey")
                     stub_row = ["", new_id] + [""] * 10  # total 12 columns
-                    append_row_with_retry(survey_ws, stub_row)
+                    survey_ws.append_row(stub_row)
                 except Exception as e:
                     st.error("Error creating a record for your participant ID in the survey sheet.")
                     st.exception(e)
@@ -705,10 +676,10 @@ def render_headphone_check():
                     cell = survey_ws.find(p_id, in_column=2)
                     row_idx = cell.row
                     # Update the existing row with full data
-                    update_with_retry(survey_ws, f"A{row_idx}:L{row_idx}", [full_row])
+                    survey_ws.update(f"A{row_idx}:L{row_idx}", [full_row])
                 except Exception:
                     # If not found for some reason, append as new row
-                    append_row_with_retry(survey_ws, full_row)
+                    survey_ws.append_row(full_row)
 
                 st.session_state.survey_saved = True
             except Exception as e:
@@ -819,12 +790,12 @@ def render_item_page(page_name: str, item_config: dict):
     with st.form(f"transcription_form_{page_name}"):
         first_transcript = st.text_area(
             "First transcript (after first listen):",
-            height=60,  # reduced height
+            height=60,  # reduced from 120
             key=f"first_{page_name}",
         )
         second_transcript = st.text_area(
             "Second transcript (after second listen; you may copy the first or edit):",
-            height=60,  # reduced height
+            height=60,  # reduced from 120
             key=f"second_{page_name}",
         )
 
@@ -862,7 +833,7 @@ def render_item_page(page_name: str, item_config: dict):
         ]
 
         try:
-            append_row_with_retry(transcript_ws, row)
+            transcript_ws.append_row(row)
         except Exception as e:
             st.error("Error saving your transcripts to Google Sheets.")
             st.exception(e)
