@@ -23,7 +23,7 @@ def inject_layout_css():
         """
         <style>
         .block-container {
-            padding-top: 2.5rem;  /* bumped up from 1.0rem so headings don't get clipped */
+            padding-top: 2.5rem;
             padding-bottom: 1.0rem;
         }
         </style>
@@ -790,12 +790,12 @@ def render_item_page(page_name: str, item_config: dict):
     with st.form(f"transcription_form_{page_name}"):
         first_transcript = st.text_area(
             "First transcript (after first listen):",
-            height=120,
+            height=60,  # reduced from 120
             key=f"first_{page_name}",
         )
         second_transcript = st.text_area(
             "Second transcript (after second listen; you may copy the first or edit):",
-            height=120,
+            height=60,  # reduced from 120
             key=f"second_{page_name}",
         )
 
