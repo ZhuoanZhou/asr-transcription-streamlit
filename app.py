@@ -42,14 +42,13 @@ BASE_PAGES = [LOGIN_PAGE, "intro", "screening", "headphone", "instructions"]
 # --------------------------------------
 
 
-@st.cache_resource
 def get_gspread_client():
+    """Create a fresh gspread client (no cross-session caching)."""
     sa_info = st.secrets["gcp_service_account"]
     gc = gspread.service_account_from_dict(sa_info)
     return gc
 
 
-@st.cache_resource
 def get_worksheet(which: str):
     """
     which: 'survey' or 'transcript'
@@ -67,10 +66,10 @@ def get_worksheet(which: str):
     return sh.sheet1
 
 
-@st.cache_data
 def get_existing_participant_ids():
     """
     Return a set of all participant_ids present in survey and transcript sheets.
+    No caching to avoid stale data and concurrency surprises.
     """
     ids = set()
 
@@ -614,7 +613,12 @@ def render_headphone_check():
         st.error("Screening answers not found. Please restart the survey.")
         return
 
-    survey_ws = get_worksheet("survey")
+    try:
+        survey_ws = get_worksheet("survey")
+    except Exception as e:
+        st.error("Error accessing the survey sheet. Please try again in a moment.")
+        st.exception(e)
+        return
 
     with st.form("headphone_form"):
         hp_responses = {}
@@ -728,7 +732,13 @@ def render_instructions():
 
 
 def render_item_page(page_name: str, item_config: dict):
-    transcript_ws = get_worksheet("transcript")
+    try:
+        transcript_ws = get_worksheet("transcript")
+    except Exception as e:
+        st.error("Error accessing the transcription sheet. Please try again in a moment.")
+        st.exception(e)
+        return
+
     participant_id = st.session_state.participant_id
     main_items = st.session_state.main_items
 
@@ -790,12 +800,12 @@ def render_item_page(page_name: str, item_config: dict):
     with st.form(f"transcription_form_{page_name}"):
         first_transcript = st.text_area(
             "First transcript (after first listen):",
-            height=60,  # reduced from 120
+            height=60,  # reduced height
             key=f"first_{page_name}",
         )
         second_transcript = st.text_area(
             "Second transcript (after second listen; you may copy the first or edit):",
-            height=60,  # reduced from 120
+            height=60,  # reduced height
             key=f"second_{page_name}",
         )
 
