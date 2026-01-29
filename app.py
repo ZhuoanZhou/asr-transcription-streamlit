@@ -6,6 +6,7 @@ import io
 import base64
 import csv
 from pathlib import PurePosixPath
+import ssl  # for catching SSLError on Drive downloads
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -113,9 +114,11 @@ def generate_unique_participant_id() -> str:
 # --------------------------------------
 
 
-@st.cache_resource
 def get_drive_service():
-    """Create a Drive API service client using the same service account."""
+    """
+    Create a Drive API service client using the same service account.
+    Not cached to avoid sharing a non-thread-safe client across sessions.
+    """
     sa_info = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(
         sa_info,
@@ -126,19 +129,45 @@ def get_drive_service():
 
 
 def download_file_bytes(file_id: str) -> bytes:
-    """Download a file from Google Drive and return its raw bytes."""
-    service = get_drive_service()
-    request = service.files().get_media(fileId=file_id)
+    """
+    Download a file from Google Drive and return its raw bytes.
 
-    fh = io.BytesIO()
-    downloader = MediaIoBaseDownload(fh, request)
+    Includes a simple retry (2 attempts) to handle transient SSL errors,
+    especially under concurrent access.
+    """
+    last_err = None
+    for attempt in range(2):
+        try:
+            service = get_drive_service()
+            request = service.files().get_media(fileId=file_id)
 
-    done = False
-    while not done:
-        _, done = downloader.next_chunk()
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, request)
 
-    fh.seek(0)
-    return fh.read()
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+
+            fh.seek(0)
+            return fh.read()
+
+        except ssl.SSLError as e:
+            last_err = e
+            # retry once
+            if attempt == 0:
+                continue
+            else:
+                raise
+        except Exception as e:
+            last_err = e
+            if attempt == 0:
+                continue
+            else:
+                raise
+
+    # If we get here, raise the last error
+    if last_err:
+        raise last_err
 
 
 def render_limited_audio(audio_bytes: bytes, element_id: str, max_plays: int = 2):
