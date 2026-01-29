@@ -18,12 +18,12 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Dysarthric Speech Transcription Study", page_icon="🎧")
 
 def inject_layout_css():
-    """Reduce the space above the page content (and thus above the title)."""
+    """Adjust layout padding to reduce vertical space but avoid cutting titles."""
     st.markdown(
         """
         <style>
         .block-container {
-            padding-top: 1.0rem;  /* you can tune this between ~0.8–2.0 */
+            padding-top: 2.5rem;  /* bumped up from 1.0rem so headings don't get clipped */
             padding-bottom: 1.0rem;
         }
         </style>
@@ -735,12 +735,11 @@ def render_item_page(page_name: str, item_config: dict):
     if page_name not in st.session_state.item_audio_shown:
         st.session_state.item_audio_shown[page_name] = False
 
-    # NOTE: Removed the big header here to shorten the page
+    # No big header here to save vertical space
     keys = list(main_items.keys())
     idx = keys.index(page_name) + 1
     total = len(main_items)
 
-    # Changed from "Item x of total" to "Transcription item x of total"
     st.subheader(f"Transcription item {idx} of {total}")
 
     st.markdown(
