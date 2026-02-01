@@ -718,6 +718,18 @@ def render_login():
 
                 trans_rows = transcript_ws.get_all_values()
                 # Columns: timestamp_utc, participant_id, audio_id, ...
+                has_transcripts = any(
+                    len(r) > 1 and r[1] == pid for r in trans_rows[1:]
+                )
+
+                # NEW: if ID not found in either sheet, warn and stop
+                if not (has_survey or has_transcripts):
+                    st.error(
+                        "We could not find that participant ID in our records. "
+                        "Please check for typos or choose 'I am new here' to start as a new participant."
+                    )
+                    return
+
                 completed_audio_ids = set()
                 for r in trans_rows[1:]:
                     if len(r) > 2 and r[1] == pid:
