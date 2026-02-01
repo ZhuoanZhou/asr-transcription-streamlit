@@ -821,7 +821,7 @@ def render_intro():
         Please follow the instructions carefully and answer honestly.
         You may leave and continue the study at any time using your participant ID.
         
-        You will copy and paste the code in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card after completing the study. (Note: We need to discuss how to modify this.)
+        You will copy and paste the participant ID in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card after completing the study.
         """
     )
 
