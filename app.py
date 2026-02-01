@@ -6,7 +6,8 @@ import io
 import base64
 import csv
 from pathlib import PurePosixPath
-import ssl  # for catching SSLError on Drive downloads
+import ssl
+import random
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -17,6 +18,7 @@ import streamlit.components.v1 as components
 # Page configuration
 # --------------------------------------
 st.set_page_config(page_title="Dysarthric Speech Transcription Study", page_icon="🎧")
+
 
 def inject_layout_css():
     """Adjust layout padding to reduce vertical space but avoid cutting titles."""
@@ -32,9 +34,10 @@ def inject_layout_css():
         unsafe_allow_html=True,
     )
 
+
 LOGIN_PAGE = "login"
 FINAL_PAGE = "thank_you"
-# Fixed pages; item pages are added dynamically later
+# Fixed pages; item pages are added dynamically later per participant
 BASE_PAGES = [LOGIN_PAGE, "intro", "screening", "headphone", "instructions"]
 
 
@@ -153,7 +156,6 @@ def download_file_bytes(file_id: str) -> bytes:
 
         except ssl.SSLError as e:
             last_err = e
-            # retry once
             if attempt == 0:
                 continue
             else:
@@ -165,7 +167,6 @@ def download_file_bytes(file_id: str) -> bytes:
             else:
                 raise
 
-    # If we get here, raise the last error
     if last_err:
         raise last_err
 
@@ -206,7 +207,7 @@ def render_limited_audio(audio_bytes: bytes, element_id: str, max_plays: int = 2
 
 
 # --------------------------------------
-# Build audio index from Drive + meta_data.csv
+# Build audio index from Drive
 # --------------------------------------
 
 
@@ -256,63 +257,242 @@ def get_audio_index():
     return index
 
 
+# --------------------------------------
+# Meta-data readers: sentences & words
+# --------------------------------------
+
+
 @st.cache_resource
-def get_main_items():
+def get_sentence_items():
     """
-    Reads meta_data.csv from Drive, uses column 'current_path' for order,
-    and returns a dict:
-
+    Read meta_data_sentences.csv and return a list of items:
         {
-            "item_1": {"audio_id": normalized_path, "drive_file_id": file_id},
-            ...
+            "audio_id": normalized_path,
+            "group": "_group" value (e.g., "G0"),
+            "drive_file_id": file_id,
         }
-
-    where current_path is like 'sentences\\M03_Session2_179.wav'
-    or 'isolated_words\\M09_B1_UW27_M8.wav'.
     """
     drive_cfg = st.secrets["drive"]
-    meta_file_id = drive_cfg["meta_data_file_id"]
+    meta_file_id = drive_cfg["meta_data_sentences_file_id"]
 
-    # Download meta_data.csv
     csv_bytes = download_file_bytes(meta_file_id)
     csv_text = csv_bytes.decode("utf-8", errors="replace")
 
     reader = csv.DictReader(io.StringIO(csv_text))
     audio_index = get_audio_index()
 
-    main_items = {}
-    counter = 1
+    items = []
 
     for row in reader:
         raw_path = (row.get("current_path") or "").strip()
-        if not raw_path:
+        group = (row.get("_group") or "").strip()
+        if not raw_path or not group:
             continue
 
-        # Normalize Windows-style backslashes to POSIX-style slashes
         normalized_path = raw_path.replace("\\", "/")
-
         p = PurePosixPath(normalized_path)
         parts = p.parts
 
-        if len(parts) >= 2:
-            folder_key = parts[0]   # 'sentences' or 'isolated_words'
-            filename = p.name       # e.g., 'M03_Session2_179.wav'
-        else:
+        if len(parts) < 2:
             continue
+
+        folder_key = parts[0]   # 'sentences'
+        filename = p.name       # e.g., 'M03_Session2_179.wav'
 
         file_id = audio_index.get((folder_key, filename))
         if not file_id:
-            # Skip if no matching file in Drive index
             continue
 
-        page_name = f"item_{counter}"
-        main_items[page_name] = {
-            "audio_id": normalized_path,  # stored in transcript sheet
+        items.append(
+            {
+                "audio_id": normalized_path,
+                "group": group,
+                "drive_file_id": file_id,
+            }
+        )
+
+    return items
+
+
+@st.cache_resource
+def get_word_items():
+    """
+    Read meta_data_words.csv and return a list of items:
+        {
+            "audio_id": normalized_path,
+            "group": "_group" value (e.g., "WER0", "WER>0"),
             "drive_file_id": file_id,
         }
-        counter += 1
+    """
+    drive_cfg = st.secrets["drive"]
+    meta_file_id = drive_cfg["meta_data_words_file_id"]
+
+    csv_bytes = download_file_bytes(meta_file_id)
+    csv_text = csv_bytes.decode("utf-8", errors="replace")
+
+    reader = csv.DictReader(io.StringIO(csv_text))
+    audio_index = get_audio_index()
+
+    items = []
+
+    for row in reader:
+        raw_path = (row.get("current_path") or "").strip()
+        group = (row.get("_group") or "").strip()
+        if not raw_path or not group:
+            continue
+
+        normalized_path = raw_path.replace("\\", "/")
+        p = PurePosixPath(normalized_path)
+        parts = p.parts
+
+        if len(parts) < 2:
+            continue
+
+        folder_key = parts[0]   # 'isolated_words'
+        filename = p.name       # e.g., 'M09_B1_UW27_M8.wav'
+
+        file_id = audio_index.get((folder_key, filename))
+        if not file_id:
+            continue
+
+        items.append(
+            {
+                "audio_id": normalized_path,
+                "group": group,
+                "drive_file_id": file_id,
+            }
+        )
+
+    return items
+
+
+# --------------------------------------
+# Build per-participant main_items with blocks
+# --------------------------------------
+
+
+@st.cache_data
+def build_main_items_for_participant(participant_id: str):
+    """
+    Build the ordered items dict for a participant, using:
+      - 50 sentence items from meta_data_sentences.csv
+      - 50 word items from meta_data_words.csv
+
+    Constraints:
+      - 10 blocks, each block has 5 sentences and 5 words.
+      - Sentence blocks alternate:
+          Type A: G0=2, G1=1, G2=1, G3=1
+          Type B: G0=1, G1=1, G2=1, G3=2
+        pattern: A, B, A, B, A, B, A, B, A, B
+      - Words per block: 3× WER0, 2× WER>0
+      - Within each block, items are shuffled.
+      - Each clip is used exactly once overall.
+      - Randomization is deterministic per participant_id.
+    """
+    rng = random.Random(participant_id)
+
+    sentence_items = list(get_sentence_items())
+    word_items = list(get_word_items())
+
+    # Group sentence items
+    sent_groups = {}
+    for it in sentence_items:
+        g = it["group"]
+        sent_groups.setdefault(g, []).append(it)
+
+    # Group word items
+    word_groups = {}
+    for it in word_items:
+        g = it["group"]
+        word_groups.setdefault(g, []).append(it)
+
+    # Shuffle each group pool
+    for g_list in sent_groups.values():
+        rng.shuffle(g_list)
+    for g_list in word_groups.values():
+        rng.shuffle(g_list)
+
+    blocks = []  # list of lists of items (each block's 10 items)
+
+    for block_idx in range(10):
+        # Sentence pattern
+        if block_idx % 2 == 0:
+            # Type A: 2 G0, 1 G1, 1 G2, 1 G3
+            sent_pattern = ["G0", "G0", "G1", "G2", "G3"]
+        else:
+            # Type B: 1 G0, 1 G1, 1 G2, 2 G3
+            sent_pattern = ["G0", "G1", "G2", "G3", "G3"]
+
+        # Words pattern: 3 WER0, 2 WER>0
+        word_pattern = ["WER0", "WER0", "WER0", "WER>0", "WER>0"]
+
+        # Shuffle order of groups within each block
+        rng.shuffle(sent_pattern)
+        rng.shuffle(word_pattern)
+
+        block_items = []
+
+        # Draw sentences for this block
+        for g in sent_pattern:
+            if g not in sent_groups or not sent_groups[g]:
+                raise ValueError(f"Not enough sentence items in group {g}")
+            item = sent_groups[g].pop()
+            block_items.append(
+                {
+                    "kind": "sentence",
+                    "group": g,
+                    "audio_id": item["audio_id"],
+                    "drive_file_id": item["drive_file_id"],
+                }
+            )
+
+        # Draw words for this block
+        for g in word_pattern:
+            if g not in word_groups or not word_groups[g]:
+                raise ValueError(f"Not enough word items in group {g}")
+            item = word_groups[g].pop()
+            block_items.append(
+                {
+                    "kind": "word",
+                    "group": g,
+                    "audio_id": item["audio_id"],
+                    "drive_file_id": item["drive_file_id"],
+                }
+            )
+
+        # Shuffle within block to mix sentences & words
+        rng.shuffle(block_items)
+        blocks.append(block_items)
+
+    # Flatten blocks into ordered dict of page_name -> config
+    main_items = {}
+    counter = 1
+    for block in blocks:
+        for item in block:
+            page_name = f"item_{counter}"
+            main_items[page_name] = {
+                "audio_id": item["audio_id"],
+                "drive_file_id": item["drive_file_id"],
+                "kind": item["kind"],
+                "group": item["group"],
+            }
+            counter += 1
 
     return main_items
+
+
+def get_pages():
+    """
+    Compute the list of pages for the current session, given participant_id.
+    If no participant_id yet, only show the login page.
+    """
+    pid = st.session_state.get("participant_id", "")
+    if not pid:
+        return [LOGIN_PAGE]
+
+    main_items = build_main_items_for_participant(pid)
+    item_pages = list(main_items.keys())
+    return BASE_PAGES + item_pages + [FINAL_PAGE]
 
 
 # --------------------------------------
@@ -372,22 +552,13 @@ if "item_audio_shown" not in st.session_state:
     # per-item flag for showing audio widget
     st.session_state.item_audio_shown = {}
 
-if "main_items" not in st.session_state:
-    # Build dynamic items from meta_data.csv
-    st.session_state.main_items = get_main_items()
-
-if "pages" not in st.session_state:
-    # Build dynamic page list: login -> intro -> screening -> headphone -> instructions -> items -> thank_you
-    item_pages = list(st.session_state.main_items.keys())
-    st.session_state.pages = BASE_PAGES + item_pages + [FINAL_PAGE]
-
 if "page_index" not in st.session_state:
     st.session_state.page_index = 0  # start at "login"
 
 
 def go_next_page():
     """Move to the next page in the flow (no going back)."""
-    pages = st.session_state.pages
+    pages = get_pages()
     if st.session_state.page_index < len(pages) - 1:
         st.session_state.page_index += 1
         st.rerun()
@@ -414,9 +585,6 @@ def render_login():
         ["I am new here", "I already have a participant ID"],
         key="login_mode",
     )
-
-    pages = st.session_state.pages
-    main_items = st.session_state.main_items
 
     # --- New participant flow ---
     if mode == "I am new here":
@@ -452,7 +620,7 @@ def render_login():
                 "You will need this ID if you come back later."
             )
             if st.button("Start the study", key="btn_start_study"):
-                # Jump to intro
+                pages = get_pages()
                 if "intro" in pages:
                     st.session_state.page_index = pages.index("intro")
                 else:
@@ -494,7 +662,8 @@ def render_login():
                 st.session_state.survey_saved = has_survey
                 st.session_state.screening_answers = None  # not needed later
 
-                pages = st.session_state.pages
+                main_items = build_main_items_for_participant(pid)
+                pages = get_pages()
                 item_pages = [p for p in pages if p in main_items]
 
                 # Decide next page
@@ -726,7 +895,12 @@ def render_headphone_check():
 def render_instructions():
     st.header("Instructions")
 
-    main_items = st.session_state.main_items
+    pid = st.session_state.get("participant_id", "")
+    if not pid:
+        st.error("Participant ID not found. Please go back to the login page.")
+        return
+
+    main_items = build_main_items_for_participant(pid)
     total_items = len(main_items)
 
     st.markdown(
@@ -751,7 +925,7 @@ def render_instructions():
         - Many of the spoken sentences may be difficult to understand. It is OK not to be sure what you heard. 
         - Please listen carefully, follow the instructions, and write your best guess.
         - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing.  
-          Just leave a place holder (e.g. "...", "_", or any mark you like) in between two words as a placeholder.  
+          Just leave a place holder (e.g. "...", "_", "X" or any mark you like) in between two words as a placeholder.  
           - Example: write `"I want to _ water."` or `"I want to ... water."` for `"I want to [buy a bottle of] water."`
         """
     )
@@ -769,12 +943,13 @@ def render_item_page(page_name: str, item_config: dict):
         return
 
     participant_id = st.session_state.participant_id
-    main_items = st.session_state.main_items
+    pid = participant_id
 
     if page_name not in st.session_state.item_audio_shown:
         st.session_state.item_audio_shown[page_name] = False
 
     # No big header here to save vertical space
+    main_items = build_main_items_for_participant(pid)
     keys = list(main_items.keys())
     idx = keys.index(page_name) + 1
     total = len(main_items)
@@ -896,7 +1071,7 @@ def render_thank_you():
         You may now **close this window** after save the code.
         """
     )
-    
+
     if st.session_state.participant_id:
         st.write(f"Your participant ID: `{st.session_state.participant_id}`")
 
@@ -907,9 +1082,15 @@ def render_thank_you():
 def main():
     inject_layout_css()
 
-    pages = st.session_state.pages
+    pages = get_pages()
+    # Ensure page_index is in range (defensive, in case pages changes shape)
+    if st.session_state.page_index >= len(pages):
+        st.session_state.page_index = 0
+
     current_page = pages[st.session_state.page_index]
-    main_items = st.session_state.main_items
+
+    pid = st.session_state.get("participant_id", "")
+    main_items = build_main_items_for_participant(pid) if pid else {}
 
     if current_page == LOGIN_PAGE:
         render_login()
