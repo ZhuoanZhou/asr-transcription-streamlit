@@ -711,19 +711,30 @@ def render_login():
                 transcript_ws = get_worksheet("transcript")
 
                 survey_rows = survey_ws.get_all_values()
-                # Columns: timestamp_utc, participant_id, q1..q6, hp1..hp4
-                has_survey = any(
-                    len(r) > 1 and r[1] == pid for r in survey_rows[1:]
-                )
-
                 trans_rows = transcript_ws.get_all_values()
-                # Columns: timestamp_utc, participant_id, audio_id, ...
+
+                # --- Survey row lookup and completeness check ---
+                row_for_pid = None
+                for r in survey_rows[1:]:
+                    if len(r) > 1 and r[1] == pid:
+                        row_for_pid = r
+                        break
+
+                has_survey_row = row_for_pid is not None
+                is_complete_survey = False
+                if has_survey_row:
+                    # Pad to 12 columns: [ts, pid, q1..q6, hp1..hp4]
+                    padded = row_for_pid + [""] * (12 - len(row_for_pid))
+                    q_hp_cells = padded[2:12]  # q1..q6 (2–7), hp1..hp4 (8–11)
+                    is_complete_survey = all((c or "").strip() != "" for c in q_hp_cells)
+
+                # --- Transcript presence + completed audio ids ---
                 has_transcripts = any(
                     len(r) > 1 and r[1] == pid for r in trans_rows[1:]
                 )
 
-                # NEW: if ID not found in either sheet, warn and stop
-                if not (has_survey or has_transcripts):
+                # If no record anywhere, show error and stop
+                if not (has_survey_row or has_transcripts):
                     st.error(
                         "We could not find that participant ID in our records. "
                         "Please check for typos or choose 'I am new here' to start as a new participant."
@@ -735,30 +746,41 @@ def render_login():
                     if len(r) > 2 and r[1] == pid:
                         completed_audio_ids.add(r[2])
 
-                st.session_state.survey_saved = has_survey
-                st.session_state.screening_answers = None  # not needed later
+                # Persist survey completion status into session
+                st.session_state.survey_saved = is_complete_survey
+                st.session_state.screening_answers = None  # not needed for resume
 
                 main_items = build_main_items_for_participant(pid)
                 pages = get_pages()
                 item_pages = [p for p in pages if p in main_items]
 
-                # Decide next page
-                if not has_survey:
-                    next_page = "intro"
-                else:
-                    # Find the first audio_id not yet completed
-                    next_audio_page = None
-                    for p in item_pages:
-                        aid = main_items[p]["audio_id"]
-                        if aid not in completed_audio_ids:
-                            next_audio_page = p
-                            break
-
-                    if next_audio_page is None:
-                        # All items completed
-                        next_page = FINAL_PAGE
+                # Decide next page based on completeness
+                if not is_complete_survey:
+                    # Has some row (stub or partial), but screening+headphone not complete.
+                    # Send them to screening to (re)complete it.
+                    if "screening" in pages:
+                        next_page = "screening"
                     else:
-                        next_page = next_audio_page
+                        # Fallback – shouldn't normally happen
+                        next_page = "intro"
+                else:
+                    # Survey fully completed (screening + headphone)
+                    if not has_transcripts:
+                        # No transcription yet: start with the first item page
+                        next_page = item_pages[0] if item_pages else FINAL_PAGE
+                    else:
+                        # Some transcripts exist, resume from first unfinished item
+                        next_audio_page = None
+                        for p in item_pages:
+                            aid = main_items[p]["audio_id"]
+                            if aid not in completed_audio_ids:
+                                next_audio_page = p
+                                break
+
+                        if next_audio_page is None:
+                            next_page = FINAL_PAGE
+                        else:
+                            next_page = next_audio_page
 
                 if next_page not in pages:
                     st.error(
@@ -1001,7 +1023,7 @@ def render_instructions():
         - Many of the spoken sentences may be difficult to understand. It is OK not to be sure what you heard. 
         - Please listen carefully, follow the instructions, and write your best guess.
         - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing.  
-          Just leave a place holder (e.g. "...", "_", "X", or any mark you like) in between two words as a placeholder.  
+          Just leave a place holder (e.g. "...", "_", "X" or any mark you like) in between two words as a placeholder.  
           - Example: write `"I want to _ water."` or `"I want to ... water."` for `"I want to [buy a bottle of] water."`
         """
     )
