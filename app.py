@@ -405,14 +405,22 @@ def build_main_items_for_participant(participant_id: str):
     required_sent = {"G0": 15, "G1": 10, "G2": 10, "G3": 15}
     actual_sent = {g: len(sent_groups.get(g, [])) for g in required_sent}
 
+    # Show counts in the UI so you can see what the app actually sees
+    st.write("Sentence group counts (usable items):", actual_sent)
+
     for g, need in required_sent.items():
         have = actual_sent.get(g, 0)
         if have < need:
-            raise ValueError(
-                f"Sentence group {g} has {have} usable items, but {need} are required. "
-                "Check meta_data_sentences.csv (rows per _group) and the filenames in your "
-                "Google Drive 'sentences' folder to ensure every row points to an existing file."
+            st.error(
+                f"Sentence group **{g}** has **{have}** usable items, but **{need}** are required.\n\n"
+                "Usable items mean rows where:\n"
+                "1. `_group` is set to that value, and\n"
+                "2. `current_path` points to a file that actually exists in the Drive "
+                "folder specified by `sentences_folder_id`.\n\n"
+                "Please check `meta_data_sentences.csv` and the filenames in your "
+                "Google Drive `sentences` folder."
             )
+            st.stop()
 
     # -------------------------------
     # Group word items & sanity check counts
@@ -425,14 +433,21 @@ def build_main_items_for_participant(participant_id: str):
     required_word = {"WER0": 30, "WER>0": 20}
     actual_word = {g: len(word_groups.get(g, [])) for g in required_word}
 
+    st.write("Word group counts (usable items):", actual_word)
+
     for g, need in required_word.items():
         have = actual_word.get(g, 0)
         if have < need:
-            raise ValueError(
-                f"Word group {g} has {have} usable items, but {need} are required. "
-                "Check meta_data_words.csv (rows per _group) and the filenames in your "
-                "Google Drive 'isolated_words' folder."
+            st.error(
+                f"Word group **{g}** has **{have}** usable items, but **{need}** are required.\n\n"
+                "Usable items mean rows where:\n"
+                "1. `_group` is set to that value, and\n"
+                "2. `current_path` points to a file that actually exists in the Drive "
+                "folder specified by `isolated_words_folder_id`.\n\n"
+                "Please check `meta_data_words.csv` and the filenames in your "
+                "Google Drive `isolated_words` folder."
             )
+            st.stop()
 
     # Shuffle each group pool (after we know counts are OK)
     for g_list in sent_groups.values():
@@ -462,8 +477,6 @@ def build_main_items_for_participant(participant_id: str):
 
         # Draw sentences for this block
         for g in sent_pattern:
-            # At this point we KNOW there are enough items total,
-            # so a pop() here should not fail unless CSVs changed mid-run.
             item = sent_groups[g].pop()
             block_items.append(
                 {
@@ -505,7 +518,6 @@ def build_main_items_for_participant(participant_id: str):
             counter += 1
 
     return main_items
-
 
 
 def get_pages():
