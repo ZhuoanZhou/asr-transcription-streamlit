@@ -261,6 +261,23 @@ def get_audio_index():
 # Meta-data readers: sentences & words
 # --------------------------------------
 
+def _resolve_header(fieldnames, logical_name):
+    """
+    Given the list of CSV fieldnames and a logical column name like
+    'current_path' or '_group', return the actual fieldname key
+    that matches (ignoring BOM, leading/trailing spaces, and case).
+    """
+    if not fieldnames:
+        return logical_name
+
+    target = logical_name.lower()
+    for name in fieldnames:
+        clean = name.strip().lstrip("\ufeff")  # remove spaces + BOM
+        if clean.lower() == target:
+            return name  # return the original exact key used by DictReader
+    # Fallback: just return the logical name (if it's already exact)
+    return logical_name
+
 
 @st.cache_resource
 def get_sentence_items():
@@ -275,32 +292,46 @@ def get_sentence_items():
     drive_cfg = st.secrets["drive"]
     meta_file_id = drive_cfg["meta_data_sentences_file_id"]
 
+    # Download the CSV
     csv_bytes = download_file_bytes(meta_file_id)
     csv_text = csv_bytes.decode("utf-8", errors="replace")
 
-    reader = csv.DictReader(io.StringIO(csv_text))
-    audio_index = get_audio_index()
+    f = io.StringIO(csv_text)
+    reader = csv.DictReader(f)
 
+    if reader.fieldnames is None:
+        st.error("Could not read header row from meta_data_sentences.csv.")
+        st.stop()
+
+    # Resolve real column names (handle BOM, spaces, case)
+    path_col = _resolve_header(reader.fieldnames, "current_path")
+    group_col = _resolve_header(reader.fieldnames, "_group")
+
+    audio_index = get_audio_index()
     items = []
 
     for row in reader:
-        raw_path = (row.get("current_path") or "").strip()
-        group = (row.get("_group") or "").strip()
+        raw_path = (row.get(path_col) or "").strip()
+        group = (row.get(group_col) or "").strip()
         if not raw_path or not group:
             continue
 
+        # Normalize Windows-style backslashes to POSIX-style slashes
         normalized_path = raw_path.replace("\\", "/")
+
         p = PurePosixPath(normalized_path)
         parts = p.parts
 
         if len(parts) < 2:
+            # e.g. just "foo.wav" without "sentences/"
             continue
 
-        folder_key = parts[0]   # 'sentences'
+        folder_key = parts[0]   # expected to be 'sentences'
         filename = p.name       # e.g., 'M03_Session2_179.wav'
 
         file_id = audio_index.get((folder_key, filename))
         if not file_id:
+            # If there is no matching file in Drive index, skip
             continue
 
         items.append(
@@ -312,7 +343,6 @@ def get_sentence_items():
         )
 
     return items
-
 
 @st.cache_resource
 def get_word_items():
@@ -327,28 +357,39 @@ def get_word_items():
     drive_cfg = st.secrets["drive"]
     meta_file_id = drive_cfg["meta_data_words_file_id"]
 
+    # Download the CSV
     csv_bytes = download_file_bytes(meta_file_id)
     csv_text = csv_bytes.decode("utf-8", errors="replace")
 
-    reader = csv.DictReader(io.StringIO(csv_text))
-    audio_index = get_audio_index()
+    f = io.StringIO(csv_text)
+    reader = csv.DictReader(f)
 
+    if reader.fieldnames is None:
+        st.error("Could not read header row from meta_data_words.csv.")
+        st.stop()
+
+    # Resolve real column names (handle BOM, spaces, case)
+    path_col = _resolve_header(reader.fieldnames, "current_path")
+    group_col = _resolve_header(reader.fieldnames, "_group")
+
+    audio_index = get_audio_index()
     items = []
 
     for row in reader:
-        raw_path = (row.get("current_path") or "").strip()
-        group = (row.get("_group") or "").strip()
+        raw_path = (row.get(path_col) or "").strip()
+        group = (row.get(group_col) or "").strip()
         if not raw_path or not group:
             continue
 
         normalized_path = raw_path.replace("\\", "/")
+
         p = PurePosixPath(normalized_path)
         parts = p.parts
 
         if len(parts) < 2:
             continue
 
-        folder_key = parts[0]   # 'isolated_words'
+        folder_key = parts[0]   # expected to be 'isolated_words'
         filename = p.name       # e.g., 'M09_B1_UW27_M8.wav'
 
         file_id = audio_index.get((folder_key, filename))
@@ -364,6 +405,7 @@ def get_word_items():
         )
 
     return items
+
 
 
 # --------------------------------------
