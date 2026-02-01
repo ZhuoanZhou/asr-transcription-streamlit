@@ -384,7 +384,7 @@ def build_main_items_for_participant(participant_id: str):
           Type A: G0=2, G1=1, G2=1, G3=1
           Type B: G0=1, G1=1, G2=1, G3=2
         pattern: A, B, A, B, A, B, A, B, A, B
-      - Words per block: 3× WER0, 2× WER>0
+      - Words per block: 3 WER0, 2 WER>0
       - Within each block, items are shuffled.
       - Each clip is used exactly once overall.
       - Randomization is deterministic per participant_id.
@@ -394,19 +394,47 @@ def build_main_items_for_participant(participant_id: str):
     sentence_items = list(get_sentence_items())
     word_items = list(get_word_items())
 
-    # Group sentence items
+    # -------------------------------
+    # Group sentence items & sanity check counts
+    # -------------------------------
     sent_groups = {}
     for it in sentence_items:
         g = it["group"]
         sent_groups.setdefault(g, []).append(it)
 
-    # Group word items
+    required_sent = {"G0": 15, "G1": 10, "G2": 10, "G3": 15}
+    actual_sent = {g: len(sent_groups.get(g, [])) for g in required_sent}
+
+    for g, need in required_sent.items():
+        have = actual_sent.get(g, 0)
+        if have < need:
+            raise ValueError(
+                f"Sentence group {g} has {have} usable items, but {need} are required. "
+                "Check meta_data_sentences.csv (rows per _group) and the filenames in your "
+                "Google Drive 'sentences' folder to ensure every row points to an existing file."
+            )
+
+    # -------------------------------
+    # Group word items & sanity check counts
+    # -------------------------------
     word_groups = {}
     for it in word_items:
         g = it["group"]
         word_groups.setdefault(g, []).append(it)
 
-    # Shuffle each group pool
+    required_word = {"WER0": 30, "WER>0": 20}
+    actual_word = {g: len(word_groups.get(g, [])) for g in required_word}
+
+    for g, need in required_word.items():
+        have = actual_word.get(g, 0)
+        if have < need:
+            raise ValueError(
+                f"Word group {g} has {have} usable items, but {need} are required. "
+                "Check meta_data_words.csv (rows per _group) and the filenames in your "
+                "Google Drive 'isolated_words' folder."
+            )
+
+    # Shuffle each group pool (after we know counts are OK)
     for g_list in sent_groups.values():
         rng.shuffle(g_list)
     for g_list in word_groups.values():
@@ -434,8 +462,8 @@ def build_main_items_for_participant(participant_id: str):
 
         # Draw sentences for this block
         for g in sent_pattern:
-            if g not in sent_groups or not sent_groups[g]:
-                raise ValueError(f"Not enough sentence items in group {g}")
+            # At this point we KNOW there are enough items total,
+            # so a pop() here should not fail unless CSVs changed mid-run.
             item = sent_groups[g].pop()
             block_items.append(
                 {
@@ -448,8 +476,6 @@ def build_main_items_for_participant(participant_id: str):
 
         # Draw words for this block
         for g in word_pattern:
-            if g not in word_groups or not word_groups[g]:
-                raise ValueError(f"Not enough word items in group {g}")
             item = word_groups[g].pop()
             block_items.append(
                 {
@@ -479,6 +505,7 @@ def build_main_items_for_participant(participant_id: str):
             counter += 1
 
     return main_items
+
 
 
 def get_pages():
