@@ -1075,7 +1075,7 @@ def render_item_page(page_name: str, item_config: dict):
           Your time will start from that moment.  
         - You may listen to this item **up to two times**.  
         - Then provide your first and second transcripts below.
-        - Please wait until the audio stops before starting your second playback.
+        - Please do not press pause on the audio files, clicking pause counts the same as if you listened the whole clip.
         """
     )
 
@@ -1113,12 +1113,12 @@ def render_item_page(page_name: str, item_config: dict):
     with st.form(f"transcription_form_{page_name}"):
         first_transcript = st.text_area(
             "First transcript (after first listen):",
-            height=40,  # ~one line
+            height=30,  # ~one line
             key=f"first_{page_name}",
         )
         second_transcript = st.text_area(
             "Second transcript (after second listen; you may copy the first or edit):",
-            height=40,  # ~one line
+            height=30,  # ~one line
             key=f"second_{page_name}",
         )
 
