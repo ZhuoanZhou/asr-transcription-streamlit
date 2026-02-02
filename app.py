@@ -913,6 +913,7 @@ def render_headphone_instructions():
         - For each item, click the audio, listen once, and choose which word you heard.  
         - You are allowed to listen to each item **up to two times**.
         - Please wait until the audio stops before starting your second playback.
+        - Please do not press pause on the audio files, clicking pause counts the same as if you listened the whole clip
         """
     )
 
