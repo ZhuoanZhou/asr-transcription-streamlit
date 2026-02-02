@@ -913,7 +913,7 @@ def render_headphone_instructions():
         - For each item, click the audio, listen once, and choose which word you heard.  
         - You are allowed to listen to each item **up to two times**.
         - Please wait until the audio stops before starting your second playback.
-        - Please do not press pause on the audio files, clicking pause counts the same as if you listened the whole clip
+        - Please do not press pause on the audio files, clicking pause counts the same as if you listened the whole clip.
         """
     )
 
@@ -927,7 +927,8 @@ def render_headphone_check():
     # Short reminder text; main instructions are on previous page
     st.markdown(
         "Please complete the following headphone/speaker check items. "
-        "You may listen up to **two times per item** before choosing your answer."
+        "You may listen up to **two times per item** before choosing your answer. "
+        "Please do not press pause on the audio files, clicking pause counts the same as if you listened the whole clip."
     )
 
     if st.session_state.screening_answers is None and not st.session_state.survey_saved:
@@ -1038,15 +1039,13 @@ def render_instructions():
 
         For each item:
 
-        1. Click **Start & show audio** to begin.  
-           - Your time will start from that moment (as a proxy for your first listen).  
+        1. Click **Start & show audio** to begin.
         2. Click **Play** in the audio player to hear the item.  
         3. After the first listen, type exactly what you think the speaker said in the text box **"First transcript"**.  
         4. You may then listen **one more time** (the player allows at most two plays).  
         5. After the second listen, you may edit or correct your transcript in the text box **"Second transcript"** if you notice new words or corrections.  
            - If not, you can just copy and paste the first transcript.  
-        6. When finished, click **"Save & Next"** to move to the next item.  
-           - Both transcripts will be saved in the Google Sheet.
+        6. When finished, click **"Save & Next"** to move to the next item.
 
         **Important notes:**
 
