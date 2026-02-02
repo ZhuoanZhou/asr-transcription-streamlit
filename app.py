@@ -1072,7 +1072,6 @@ def render_item_page(page_name: str, item_config: dict):
     st.markdown(
         """
         - Click **Start & show audio** when you are ready.
-          Your time will start from that moment.  
         - You may listen to this item **up to two times**.  
         - Then provide your first and second transcripts below.
         - Please do not press pause on the audio files, clicking pause counts the same as if you listened the whole clip.
