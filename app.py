@@ -1109,20 +1109,16 @@ def render_item_page(page_name: str, item_config: dict):
         "<hr style='margin-top:0.3rem; margin-bottom:0.3rem;'>",
         unsafe_allow_html=True,
     )
-    st.markdown(
-        "<h3 style='margin-top:0.1rem; margin-bottom:0.2rem;'>Transcription</h3>",
-        unsafe_allow_html=True,
-    )
 
     with st.form(f"transcription_form_{page_name}"):
         first_transcript = st.text_area(
             "First transcript (after first listen):",
-            height=60,  # reduced height
+            height=40,  # ~one line
             key=f"first_{page_name}",
         )
         second_transcript = st.text_area(
             "Second transcript (after second listen; you may copy the first or edit):",
-            height=60,  # reduced height
+            height=40,  # ~one line
             key=f"second_{page_name}",
         )
 
