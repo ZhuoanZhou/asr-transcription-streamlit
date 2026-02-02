@@ -821,7 +821,7 @@ def render_intro():
         Please follow the instructions carefully and answer honestly.
         You may leave and continue the study at any time using your participant ID.
         
-        You will copy and paste the participant ID in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card after completing the study.
+        You will copy and paste the code in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card after completing the study. (Note: We need to discuss how to modify this.)
         """
     )
 
@@ -838,12 +838,14 @@ def render_screening():
         q1 = st.radio(
             "1. Is English your first language?",
             ["Yes", "No"],
+            index=None,  # no default
             key="q1_english_first",
         )
 
         q2 = st.radio(
             "2. What is your age range?",
             ["Under 18", "18–24", "25–34", "35–44", "45–54", "55–64", "65+"],
+            index=None,  # no default
             key="q2_age_range",
         )
 
@@ -852,12 +854,14 @@ def render_screening():
         q4 = st.radio(
             "4. What is the highest education level you have completed?",
             ["Some high school", "High school", "Some college", "College", "Advanced degree"],
+            index=None,  # no default
             key="q4_education",
         )
 
         q5 = st.radio(
             "5. Have you ever had a speech disability?",
             ["Yes", "No"],
+            index=None,  # no default
             key="q5_speech_disability",
         )
 
@@ -869,14 +873,19 @@ def render_screening():
                 "I have had passing conversations with individuals who have a disability that impacts speech.",
                 "I do not remember communicating with an individuals who has a disability that impacts speech.",
             ],
+            index=None,  # no default
             key="q6_experience",
         )
 
         submitted = st.form_submit_button("Submit & Next")
 
     if submitted:
-        if q3.strip() == "":
-            st.error("Please answer all questions (gender cannot be empty).")
+        # Validate all radios answered + gender not empty
+        missing_radio = any(
+            ans is None for ans in [q1, q2, q4, q5, q6]
+        )
+        if missing_radio or q3.strip() == "":
+            st.error("Please answer **all** questions before continuing.")
             return
 
         st.session_state.screening_answers = {
@@ -939,6 +948,7 @@ def render_headphone_check():
             answer = st.radio(
                 "Which word did you hear?",
                 options,
+                index=None,  # no default
                 key=f"hp_radio_{item['id']}",
             )
             hp_responses[item["id"]] = answer
@@ -948,6 +958,11 @@ def render_headphone_check():
         submitted = st.form_submit_button("Submit & Next")
 
     if submitted:
+        # Require answers for all headphone items
+        if any(v is None for v in hp_responses.values()):
+            st.error("Please answer every headphone/speaker check item before continuing.")
+            return
+
         # Save screening + headphone to the same sheet (one row per participant)
         if not st.session_state.survey_saved:
             timestamp = datetime.now(timezone.utc).isoformat()
@@ -1023,7 +1038,7 @@ def render_instructions():
         - Many of the spoken sentences may be difficult to understand. It is OK not to be sure what you heard. 
         - Please listen carefully, follow the instructions, and write your best guess.
         - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing.  
-          Just leave a place holder (e.g. "...", "_", "X" or any mark you like) in between two words as a placeholder.  
+          Just leave a place holder (e.g. "...", "_", or any mark you like) in between two words as a placeholder.  
           - Example: write `"I want to _ water."` or `"I want to ... water."` for `"I want to [buy a bottle of] water."`
         """
     )
