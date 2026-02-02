@@ -38,7 +38,8 @@ def inject_layout_css():
 LOGIN_PAGE = "login"
 FINAL_PAGE = "thank_you"
 # Fixed pages; item pages are added dynamically later per participant
-BASE_PAGES = [LOGIN_PAGE, "intro", "screening", "headphone", "instructions"]
+# NOTE: headphone_instructions inserted between screening and headphone
+BASE_PAGES = [LOGIN_PAGE, "intro", "screening", "headphone_instructions", "headphone", "instructions"]
 
 
 # --------------------------------------
@@ -821,7 +822,7 @@ def render_intro():
         Please follow the instructions carefully and answer honestly.
         You may leave and continue the study at any time using your participant ID.
         
-        You will copy and paste the code in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card after completing the study. (Note: We need to discuss how to modify this.)
+        You will copy and paste the participant ID in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card after completing the study.
         """
     )
 
@@ -900,7 +901,8 @@ def render_screening():
         go_next_page()
 
 
-def render_headphone_check():
+def render_headphone_instructions():
+    """New page: instructions for the headphone/speaker check (your existing text)."""
     st.header("Headphone / Speaker Check")
 
     st.markdown(
@@ -912,6 +914,19 @@ def render_headphone_check():
         - You are allowed to listen to each item **up to two times**.
         - Please wait until the audio stops before starting your second playback.
         """
+    )
+
+    if st.button("Next", key="headphone_instr_next"):
+        go_next_page()
+
+
+def render_headphone_check():
+    st.header("Headphone / Speaker Check")
+
+    # Short reminder text; main instructions are on previous page
+    st.markdown(
+        "Please complete the following headphone/speaker check items. "
+        "You may listen up to **two times per item** before choosing your answer."
     )
 
     if st.session_state.screening_answers is None and not st.session_state.survey_saved:
@@ -1205,6 +1220,8 @@ def main():
         render_intro()
     elif current_page == "screening":
         render_screening()
+    elif current_page == "headphone_instructions":
+        render_headphone_instructions()
     elif current_page == "headphone":
         render_headphone_check()
     elif current_page == "instructions":
