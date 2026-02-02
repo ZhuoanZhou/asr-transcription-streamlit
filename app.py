@@ -1038,22 +1038,18 @@ def render_instructions():
         You will transcribe **{total_items} short spoken items**, one at a time.
 
         For each item:
-
         1. Click **Start & show audio** to begin.
         2. Click **Play** in the audio player to hear the item.  
         3. After the first listen, type exactly what you think the speaker said in the text box **"First transcript"**.  
         4. You may then listen **one more time** (the player allows at most two plays).  
-        5. After the second listen, you may edit or correct your transcript in the text box **"Second transcript"** if you notice new words or corrections.  
-           - If not, you can just copy and paste the first transcript.  
+        5. After the second listen, you may edit or correct your transcript in the text box **"Second transcript"** if you notice new words or corrections. If not, you can just copy and paste the first transcript.  
         6. When finished, click **"Save & Next"** to move to the next item.
 
         **Important notes:**
-
         - The sentences you will listen to are the speech of individuals who have dysarthria, or a disability that affects the clarity of their speech.
         - Many of the spoken sentences may be difficult to understand. It is OK not to be sure what you heard. 
         - Please listen carefully, follow the instructions, and write your best guess.
-        - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing.  
-          Just leave a place holder (e.g. "...", "_", or any mark you like) in between two words as a placeholder.  
+        - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing. Leave a place holder (e.g. "...", "_", or any mark you like) as a placeholder.  
           - Example: write `"I want to _ water."` or `"I want to ... water."` for `"I want to [buy a bottle of] water."`
         """
     )
