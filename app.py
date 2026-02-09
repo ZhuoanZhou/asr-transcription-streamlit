@@ -872,7 +872,7 @@ def render_screening():
                 "I have one or more close friends or family members with a disability that impacts speech.",
                 "I work in a field that supports people who have disabilities that impact speech.",
                 "I have had passing conversations with individuals who have a disability that impacts speech.",
-                "I do not remember communicating with an individuals who has a disability that impacts speech.",
+                "I do not remember communicating with an individual who has a disability that impacts speech.",
             ],
             index=None,  # no default
             key="q6_experience",
@@ -1038,6 +1038,7 @@ def render_instructions():
         You will transcribe **{total_items} short spoken items**, one at a time.
 
         For each item:
+        
         1. Click **Start & show audio** to begin.
         2. Click **Play** in the audio player to hear the item.  
         3. After the first listen, type exactly what you think the speaker said in the text box **"First transcript"**.  
@@ -1046,8 +1047,9 @@ def render_instructions():
         6. When finished, click **"Save & Next"** to move to the next item.
 
         **Important notes:**
-        - The sentences you will listen to are the speech of individuals who have dysarthria, or a disability that affects the clarity of their speech.
-        - Many of the spoken sentences may be difficult to understand. It is OK not to be sure what you heard. 
+        
+        - The audio clips (word/phrase/sentence) you will listen to are the speech of individuals who have dysarthria, or a disability that affects the clarity of their speech.
+        - Many of the spoken words/phrases/sentences may be difficult to understand. It is OK not to be sure what you heard. 
         - Please listen carefully, follow the instructions, and write your best guess.
         - If there are unrecognizable words in between two words you want to write down, do not worry about how many words are missing. Leave a place holder (e.g. "...", "_", or any mark you like) as a placeholder.  
           - Example: write `"I want to _ water."` or `"I want to ... water."` for `"I want to [buy a bottle of] water."`
