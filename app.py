@@ -909,6 +909,7 @@ def render_headphone_instructions():
         """
         This is a brief headphone/speaker check.
 
+        - Headphone is recommanded. (Optional, not required)
         - You can adjust your volume accordingly.  
         - For each item, click the audio, listen once, and choose which word you heard.  
         - You are allowed to listen to each item **up to two times**.
@@ -1041,13 +1042,13 @@ def render_instructions():
         
         1. Click **Start & show audio** to begin.
         2. Click **Play** in the audio player to hear the item.  
-        3. After the first listen, type exactly what you think the speaker said in the text box **"First transcript"**.  
-        4. You may then listen **one more time** (the player allows at most two plays).  
-        5. After the second listen, you may edit or correct your transcript in the text box **"Second transcript"** if you notice new words or corrections. If not, you can just copy and paste the first transcript.  
-        6. When finished, click **"Save & Next"** to move to the next item.
+           - You may listen **up to two times**.
+        3. After you finish listening (once or twice), type exactly what you think the speaker said in the text box **"Transcript"**.  
+        4. When finished, click **"Save & Next"** to move to the next item.
 
         **Important notes:**
         
+        - Headphone is recommanded. (Optional, not required)
         - The audio clips (word/phrase/sentence) you will listen to are the speech of individuals who have dysarthria, or a disability that affects the clarity of their speech.
         - Many of the spoken words/phrases/sentences may be difficult to understand. It is OK not to be sure what you heard. 
         - Please listen carefully, follow the instructions, and write your best guess.
@@ -1085,7 +1086,8 @@ def render_item_page(page_name: str, item_config: dict):
     st.markdown(
         """
         - Click **Start & show audio** when you are ready.
-        - You may listen to this item **up to two times**. Then provide your first and second transcripts below.
+        - You may listen to this item **up to two times**.
+        - After listening, provide your transcript in the text box below.
         - Please do not press pause on the audio files, clicking pause counts the same as if you listened the whole clip.
         """
     )
@@ -1122,29 +1124,21 @@ def render_item_page(page_name: str, item_config: dict):
     )
 
     with st.form(f"transcription_form_{page_name}"):
-        first_transcript = st.text_area(
-            "First transcript (after first listen):",
+        transcript = st.text_area(
+            "Transcript (after listening; you may listen up to two times):",
             height=30,  # ~one line
-            key=f"first_{page_name}",
-        )
-        second_transcript = st.text_area(
-            "Second transcript (after second listen; you may copy the first or edit):",
-            height=30,  # ~one line
-            key=f"second_{page_name}",
+            key=f"transcript_{page_name}",
         )
 
         submitted = st.form_submit_button("💾 Save & Next")
 
     if submitted:
         if page_name not in st.session_state.item_start_times:
-            st.error("Please click 'Start & show audio' before submitting your transcripts.")
+            st.error("Please click 'Start & show audio' before submitting your transcript.")
             return
 
-        if not first_transcript.strip():
-            st.error("First transcript cannot be empty. Please type something you understood.")
-            return
-        if not second_transcript.strip():
-            st.error("Second transcript cannot be empty. You may copy the first transcript if nothing changed.")
+        if not transcript.strip():
+            st.error("Transcript cannot be empty. Please type something you understood.")
             return
 
         start_time = st.session_state.item_start_times[page_name]
@@ -1154,7 +1148,7 @@ def render_item_page(page_name: str, item_config: dict):
 
         # Columns:
         # [timestamp_utc, participant_id, audio_id, start_time, end_time,
-        #  duration_sec, first_transcript, second_transcript]
+        #  duration_sec, transcript]
         row = [
             timestamp,                     # timestamp_utc
             participant_id,                # participant_id
@@ -1162,14 +1156,13 @@ def render_item_page(page_name: str, item_config: dict):
             start_time.isoformat(),        # start_time
             end_time.isoformat(),          # end_time
             round(duration_sec, 3),        # duration_sec
-            first_transcript,              # first_transcript
-            second_transcript,             # second_transcript
+            transcript,                    # final transcript
         ]
 
         try:
             transcript_ws.append_row(row)
         except Exception as e:
-            st.error("Error saving your transcripts to Google Sheets.")
+            st.error("Error saving your transcript to Google Sheets.")
             st.exception(e)
             return
 
