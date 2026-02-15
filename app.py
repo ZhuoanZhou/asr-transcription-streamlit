@@ -821,8 +821,7 @@ def render_intro():
         Your responses will be stored anonymously.
         Please follow the instructions carefully and answer honestly.
         You may leave and continue the study at any time using your participant ID.
-        
-        You will copy and paste the participant ID in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card after completing the study.
+        Please keep your participant ID for your record.
         """
     )
 
@@ -1179,9 +1178,9 @@ def render_thank_you():
         """
         Thank you for participating in this study.  
         Your responses have been recorded.
-        Please copy and paste your participant ID in the body of an email to Christine Holyfield at ceholyfi@uark.edu to receive a gift card.
+        Please keep your participant ID for your record.
 
-        You may now **close this window** after save the code.
+        You may now **close this window** after save the ID.
         """
     )
 
