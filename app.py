@@ -38,7 +38,6 @@ def inject_layout_css():
 LOGIN_PAGE = "login"
 FINAL_PAGE = "thank_you"
 # Fixed pages; item pages are added dynamically later per participant
-# NOTE: headphone_instructions inserted between screening and headphone
 BASE_PAGES = [LOGIN_PAGE, "intro", "screening", "headphone_instructions", "headphone", "instructions"]
 
 
@@ -82,7 +81,6 @@ def get_existing_participant_ids():
     try:
         survey_ws = get_worksheet("survey")
         survey_rows = survey_ws.get_all_values()
-        # Columns: timestamp_utc, participant_id, ...
         for r in survey_rows[1:]:
             if len(r) > 1 and r[1].strip():
                 ids.add(r[1].strip())
@@ -93,7 +91,6 @@ def get_existing_participant_ids():
     try:
         transcript_ws = get_worksheet("transcript")
         trans_rows = transcript_ws.get_all_values()
-        # Columns: timestamp_utc, participant_id, audio_id, ...
         for r in trans_rows[1:]:
             if len(r) > 1 and r[1].strip():
                 ids.add(r[1].strip())
@@ -107,7 +104,6 @@ def generate_unique_participant_id() -> str:
     """Generate a 10-character ID not already used in Sheets."""
     existing_ids = get_existing_participant_ids()
     while True:
-        # uuid4().hex is 32 hex chars with no hyphens; take first 10
         candidate = uuid.uuid4().hex[:10]
         if candidate not in existing_ids:
             return candidate
@@ -135,9 +131,7 @@ def get_drive_service():
 def download_file_bytes(file_id: str) -> bytes:
     """
     Download a file from Google Drive and return its raw bytes.
-
-    Includes a simple retry (2 attempts) to handle transient SSL errors,
-    especially under concurrent access.
+    Includes a simple retry (2 attempts) to handle transient SSL errors.
     """
     last_err = None
     for attempt in range(2):
@@ -159,14 +153,12 @@ def download_file_bytes(file_id: str) -> bytes:
             last_err = e
             if attempt == 0:
                 continue
-            else:
-                raise
+            raise
         except Exception as e:
             last_err = e
             if attempt == 0:
                 continue
-            else:
-                raise
+            raise
 
     if last_err:
         raise last_err
@@ -175,7 +167,6 @@ def download_file_bytes(file_id: str) -> bytes:
 def render_limited_audio(audio_bytes: bytes, element_id: str, max_plays: int = 2):
     """
     Render an HTML5 audio player that disables itself after max_plays.
-    element_id must be unique per audio on the page.
     """
     b64 = base64.b64encode(audio_bytes).decode("utf-8")
 
@@ -265,19 +256,17 @@ def get_audio_index():
 
 def _resolve_header(fieldnames, logical_name):
     """
-    Given the list of CSV fieldnames and a logical column name like
-    'current_path' or '_group', return the actual fieldname key
-    that matches (ignoring BOM, leading/trailing spaces, and case).
+    Return the actual fieldname key that matches logical_name
+    (ignoring BOM, leading/trailing spaces, and case).
     """
     if not fieldnames:
         return logical_name
 
     target = logical_name.lower()
     for name in fieldnames:
-        clean = name.strip().lstrip("\ufeff")  # remove spaces + BOM
+        clean = name.strip().lstrip("\ufeff")
         if clean.lower() == target:
-            return name  # return the original exact key used by DictReader
-    # Fallback: just return the logical name (if it's already exact)
+            return name
     return logical_name
 
 
@@ -288,18 +277,9 @@ def _resolve_header(fieldnames, logical_name):
 
 @st.cache_resource
 def get_sentence_items():
-    """
-    Read meta_data_sentences.csv and return a list of items:
-        {
-            "audio_id": normalized_path,
-            "group": "_group" value (e.g., "G0"),
-            "drive_file_id": file_id,
-        }
-    """
     drive_cfg = st.secrets["drive"]
     meta_file_id = drive_cfg["meta_data_sentences_file_id"]
 
-    # Download the CSV
     csv_bytes = download_file_bytes(meta_file_id)
     csv_text = csv_bytes.decode("utf-8", errors="replace")
 
@@ -310,7 +290,6 @@ def get_sentence_items():
         st.error("Could not read header row from meta_data_sentences.csv.")
         st.stop()
 
-    # Resolve real column names (handle BOM, spaces, case)
     path_col = _resolve_header(reader.fieldnames, "current_path")
     group_col = _resolve_header(reader.fieldnames, "_group")
 
@@ -323,22 +302,18 @@ def get_sentence_items():
         if not raw_path or not group:
             continue
 
-        # Normalize Windows-style backslashes to POSIX-style slashes
         normalized_path = raw_path.replace("\\", "/")
-
         p = PurePosixPath(normalized_path)
         parts = p.parts
 
         if len(parts) < 2:
-            # e.g. just "foo.wav" without "sentences/"
             continue
 
-        folder_key = parts[0]   # expected to be 'sentences'
-        filename = p.name       # e.g., 'M03_Session2_179.wav'
+        folder_key = parts[0]
+        filename = p.name
 
         file_id = audio_index.get((folder_key, filename))
         if not file_id:
-            # If there is no matching file in Drive index, skip
             continue
 
         items.append(
@@ -354,18 +329,9 @@ def get_sentence_items():
 
 @st.cache_resource
 def get_word_items():
-    """
-    Read meta_data_words.csv and return a list of items:
-        {
-            "audio_id": normalized_path,
-            "group": "_group" value (e.g., "WER0", "WER>0"),
-            "drive_file_id": file_id,
-        }
-    """
     drive_cfg = st.secrets["drive"]
     meta_file_id = drive_cfg["meta_data_words_file_id"]
 
-    # Download the CSV
     csv_bytes = download_file_bytes(meta_file_id)
     csv_text = csv_bytes.decode("utf-8", errors="replace")
 
@@ -376,7 +342,6 @@ def get_word_items():
         st.error("Could not read header row from meta_data_words.csv.")
         st.stop()
 
-    # Resolve real column names (handle BOM, spaces, case)
     path_col = _resolve_header(reader.fieldnames, "current_path")
     group_col = _resolve_header(reader.fieldnames, "_group")
 
@@ -390,15 +355,14 @@ def get_word_items():
             continue
 
         normalized_path = raw_path.replace("\\", "/")
-
         p = PurePosixPath(normalized_path)
         parts = p.parts
 
         if len(parts) < 2:
             continue
 
-        folder_key = parts[0]   # expected to be 'isolated_words'
-        filename = p.name       # e.g., 'M09_B1_UW27_M8.wav'
+        folder_key = parts[0]
+        filename = p.name
 
         file_id = audio_index.get((folder_key, filename))
         if not file_id:
@@ -423,33 +387,18 @@ def get_word_items():
 @st.cache_data
 def build_main_items_for_participant(participant_id: str):
     """
-    Build the ordered items dict for a participant, using:
-      - 50 sentence items from meta_data_sentences.csv
-      - 50 word items from meta_data_words.csv
-
-    Constraints:
-      - 10 blocks, each block has 5 sentences and 5 words.
-      - Sentence blocks alternate:
-          Type A: G0=2, G1=1, G2=1, G3=1
-          Type B: G0=1, G1=1, G2=1, G3=2
-        pattern: A, B, A, B, A, B, A, B, A, B
-      - Words per block: 3 WER0, 2 WER>0
-      - Within each block, items are shuffled.
-      - Each clip is used exactly once overall.
-      - Randomization is deterministic per participant_id.
+    Build the ordered items dict for a participant.
     """
     rng = random.Random(participant_id)
 
     sentence_items = list(get_sentence_items())
     word_items = list(get_word_items())
 
-    # Group sentence items
     sent_groups = {}
     for it in sentence_items:
         g = it["group"]
         sent_groups.setdefault(g, []).append(it)
 
-    # Sanity-check required counts for sentences
     required_sent = {"G0": 15, "G1": 10, "G2": 10, "G3": 15}
     for g, need in required_sent.items():
         have = len(sent_groups.get(g, []))
@@ -459,13 +408,11 @@ def build_main_items_for_participant(participant_id: str):
                 "Check meta_data_sentences.csv and the files in your 'sentences' folder."
             )
 
-    # Group word items
     word_groups = {}
     for it in word_items:
         g = it["group"]
         word_groups.setdefault(g, []).append(it)
 
-    # Sanity-check required counts for words
     required_word = {"WER0": 30, "WER>0": 20}
     for g, need in required_word.items():
         have = len(word_groups.get(g, []))
@@ -475,33 +422,26 @@ def build_main_items_for_participant(participant_id: str):
                 "Check meta_data_words.csv and the files in your 'isolated_words' folder."
             )
 
-    # Shuffle each group pool (after we know counts are OK)
     for g_list in sent_groups.values():
         rng.shuffle(g_list)
     for g_list in word_groups.values():
         rng.shuffle(g_list)
 
-    blocks = []  # list of lists of items (each block's 10 items)
+    blocks = []
 
     for block_idx in range(10):
-        # Sentence pattern
         if block_idx % 2 == 0:
-            # Type A: 2 G0, 1 G1, 1 G2, 1 G3
             sent_pattern = ["G0", "G0", "G1", "G2", "G3"]
         else:
-            # Type B: 1 G0, 1 G1, 1 G2, 2 G3
             sent_pattern = ["G0", "G1", "G2", "G3", "G3"]
 
-        # Words pattern: 3 WER0, 2 WER>0
         word_pattern = ["WER0", "WER0", "WER0", "WER>0", "WER>0"]
 
-        # Shuffle order of groups within each block
         rng.shuffle(sent_pattern)
         rng.shuffle(word_pattern)
 
         block_items = []
 
-        # Draw sentences for this block
         for g in sent_pattern:
             item = sent_groups[g].pop()
             block_items.append(
@@ -513,7 +453,6 @@ def build_main_items_for_participant(participant_id: str):
                 }
             )
 
-        # Draw words for this block
         for g in word_pattern:
             item = word_groups[g].pop()
             block_items.append(
@@ -525,11 +464,9 @@ def build_main_items_for_participant(participant_id: str):
                 }
             )
 
-        # Shuffle within block to mix sentences & words
         rng.shuffle(block_items)
         blocks.append(block_items)
 
-    # Flatten blocks into ordered dict of page_name -> config
     main_items = {}
     counter = 1
     for block in blocks:
@@ -549,7 +486,6 @@ def build_main_items_for_participant(participant_id: str):
 def get_pages():
     """
     Compute the list of pages for the current session, given participant_id.
-    If no participant_id yet, only show the login page.
     """
     pid = st.session_state.get("participant_id", "")
     if not pid:
@@ -561,7 +497,7 @@ def get_pages():
 
 
 # --------------------------------------
-# Headphone items (manual for now)
+# Headphone items
 # --------------------------------------
 
 
@@ -597,28 +533,25 @@ HEADPHONE_ITEMS = [
 # Session state initialization & flow
 # --------------------------------------
 if "participant_id" not in st.session_state:
-    # Will be overwritten when they generate or enter an ID
     st.session_state.participant_id = ""
 
 if "new_id_ready" not in st.session_state:
-    st.session_state.new_id_ready = False  # used for the new-participant flow
+    st.session_state.new_id_ready = False
 
 if "screening_answers" not in st.session_state:
-    st.session_state.screening_answers = None  # will store dict
+    st.session_state.screening_answers = None
 
 if "survey_saved" not in st.session_state:
     st.session_state.survey_saved = False
 
 if "item_start_times" not in st.session_state:
-    # per-item start times, set when participant first clicks "Start & show audio"
     st.session_state.item_start_times = {}
 
 if "item_audio_shown" not in st.session_state:
-    # per-item flag for showing audio widget
     st.session_state.item_audio_shown = {}
 
 if "page_index" not in st.session_state:
-    st.session_state.page_index = 0  # start at "login"
+    st.session_state.page_index = 0
 
 
 def go_next_page():
@@ -651,11 +584,9 @@ def render_login():
         key="login_mode",
     )
 
-    # --- New participant flow ---
     if mode == "I am new here":
         if not st.session_state.new_id_ready:
             if st.button("Generate my participant ID", key="btn_generate_id"):
-                # Generate new unique ID and reset per-participant state
                 new_id = generate_unique_participant_id()
                 st.session_state.participant_id = new_id
                 st.session_state.screening_answers = None
@@ -664,12 +595,9 @@ def render_login():
                 st.session_state.item_audio_shown = {}
                 st.session_state.new_id_ready = True
 
-                # Immediately create a stub row in survey sheet:
-                # [timestamp_utc, participant_id, q1..q6, hp1..hp4]
-                # We'll fill the rest later.
                 try:
                     survey_ws = get_worksheet("survey")
-                    stub_row = ["", new_id] + [""] * 10  # total 12 columns
+                    stub_row = ["", new_id] + [""] * 11  # total 13 columns
                     survey_ws.append_row(stub_row)
                 except Exception as e:
                     st.error("Error creating a record for your participant ID in the survey sheet.")
@@ -677,7 +605,6 @@ def render_login():
 
                 st.rerun()
         else:
-            # ID already generated; show it clearly
             pid = st.session_state.participant_id
             st.success(
                 f"Your participant ID is: `{pid}`\n\n"
@@ -692,8 +619,6 @@ def render_login():
                     st.session_state.page_index = 0
                 st.session_state.new_id_ready = False
                 st.rerun()
-
-    # --- Returning participant flow ---
     else:
         pid = st.text_input(
             "Enter your participant ID exactly as given before:",
@@ -714,7 +639,6 @@ def render_login():
                 survey_rows = survey_ws.get_all_values()
                 trans_rows = transcript_ws.get_all_values()
 
-                # --- Survey row lookup and completeness check ---
                 row_for_pid = None
                 for r in survey_rows[1:]:
                     if len(r) > 1 and r[1] == pid:
@@ -724,17 +648,15 @@ def render_login():
                 has_survey_row = row_for_pid is not None
                 is_complete_survey = False
                 if has_survey_row:
-                    # Pad to 12 columns: [ts, pid, q1..q6, hp1..hp4]
-                    padded = row_for_pid + [""] * (12 - len(row_for_pid))
-                    q_hp_cells = padded[2:12]  # q1..q6 (2–7), hp1..hp4 (8–11)
+                    # [ts, pid, q1..q7, hp1..hp4] = 13 columns total
+                    padded = row_for_pid + [""] * max(0, 13 - len(row_for_pid))
+                    q_hp_cells = padded[2:13]
                     is_complete_survey = all((c or "").strip() != "" for c in q_hp_cells)
 
-                # --- Transcript presence + completed audio ids ---
                 has_transcripts = any(
                     len(r) > 1 and r[1] == pid for r in trans_rows[1:]
                 )
 
-                # If no record anywhere, show error and stop
                 if not (has_survey_row or has_transcripts):
                     st.error(
                         "We could not find that participant ID in our records. "
@@ -747,30 +669,19 @@ def render_login():
                     if len(r) > 2 and r[1] == pid:
                         completed_audio_ids.add(r[2])
 
-                # Persist survey completion status into session
                 st.session_state.survey_saved = is_complete_survey
-                st.session_state.screening_answers = None  # not needed for resume
+                st.session_state.screening_answers = None
 
                 main_items = build_main_items_for_participant(pid)
                 pages = get_pages()
                 item_pages = [p for p in pages if p in main_items]
 
-                # Decide next page based on completeness
                 if not is_complete_survey:
-                    # Has some row (stub or partial), but screening+headphone not complete.
-                    # Send them to screening to (re)complete it.
-                    if "screening" in pages:
-                        next_page = "screening"
-                    else:
-                        # Fallback – shouldn't normally happen
-                        next_page = "intro"
+                    next_page = "screening" if "screening" in pages else "intro"
                 else:
-                    # Survey fully completed (screening + headphone)
                     if not has_transcripts:
-                        # No transcription yet: start with the first item page
                         next_page = item_pages[0] if item_pages else FINAL_PAGE
                     else:
-                        # Some transcripts exist, resume from first unfinished item
                         next_audio_page = None
                         for p in item_pages:
                             aid = main_items[p]["audio_id"]
@@ -778,10 +689,7 @@ def render_login():
                                 next_audio_page = p
                                 break
 
-                        if next_audio_page is None:
-                            next_page = FINAL_PAGE
-                        else:
-                            next_page = next_audio_page
+                        next_page = FINAL_PAGE if next_audio_page is None else next_audio_page
 
                 if next_page not in pages:
                     st.error(
@@ -838,53 +746,52 @@ def render_screening():
         q1 = st.radio(
             "1. Is English your first language?",
             ["Yes", "No"],
-            index=None,  # no default
+            index=None,
             key="q1_english_first",
         )
 
         q2 = st.radio(
             "2. What is your age range?",
             ["Under 18", "18–24", "25–34", "35–44", "45–54", "55–64", "65+"],
-            index=None,  # no default
+            index=None,
             key="q2_age_range",
         )
 
         q3 = st.text_input("3. What is your gender?", key="q3_gender")
 
-        q4 = st.radio(
-            "4. What is the highest education level you have completed?",
-            ["Some high school", "High school", "Some college", "College", "Advanced degree"],
-            index=None,  # no default
-            key="q4_education",
-        )
+        q4_race = st.text_input("4. What is your race/ethnicity?", key="q4_race_ethnicity")
 
         q5 = st.radio(
-            "5. Have you ever had a speech disability?",
-            ["Yes", "No"],
-            index=None,  # no default
-            key="q5_speech_disability",
+            "5. What is the highest education level you have completed?",
+            ["Some high school", "High school", "Some college", "College", "Advanced degree"],
+            index=None,
+            key="q5_education",
         )
 
         q6 = st.radio(
-            "6. Please choose which of the following best describes your previous experience communicating with individuals who have a disability that impacts speech.",
+            "6. Have you ever had a speech disability?",
+            ["Yes", "No"],
+            index=None,
+            key="q6_speech_disability",
+        )
+
+        q7 = st.radio(
+            "7. Please choose which of the following best describes your previous experience communicating with individuals who have a disability that impacts speech.",
             [
                 "I have one or more close friends or family members with a disability that impacts speech.",
                 "I work in a field that supports people who have disabilities that impact speech.",
                 "I have had passing conversations with individuals who have a disability that impacts speech.",
                 "I do not remember communicating with an individual who has a disability that impacts speech.",
             ],
-            index=None,  # no default
-            key="q6_experience",
+            index=None,
+            key="q7_experience",
         )
 
         submitted = st.form_submit_button("Submit & Next")
 
     if submitted:
-        # Validate all radios answered + gender not empty
-        missing_radio = any(
-            ans is None for ans in [q1, q2, q4, q5, q6]
-        )
-        if missing_radio or q3.strip() == "":
+        missing_radio = any(ans is None for ans in [q1, q2, q5, q6, q7])
+        if missing_radio or q3.strip() == "" or q4_race.strip() == "":
             st.error("Please answer **all** questions before continuing.")
             return
 
@@ -892,16 +799,16 @@ def render_screening():
             "q1": q1,
             "q2": q2,
             "q3": q3,
-            "q4": q4,
+            "q4_race_ethnicity": q4_race,
             "q5": q5,
             "q6": q6,
+            "q7": q7,
         }
 
         go_next_page()
 
 
 def render_headphone_instructions():
-    """New page: instructions for the headphone/speaker check (your existing text)."""
     st.header("Headphone / Speaker Check")
 
     st.markdown(
@@ -924,7 +831,6 @@ def render_headphone_instructions():
 def render_headphone_check():
     st.header("Headphone / Speaker Check")
 
-    # Short reminder text; main instructions are on previous page
     st.markdown(
         "Please complete the following headphone/speaker check items. "
         "You may listen up to **two times per item** before choosing your answer. "
@@ -965,7 +871,7 @@ def render_headphone_check():
             answer = st.radio(
                 "Which word did you hear?",
                 options,
-                index=None,  # no default
+                index=None,
                 key=f"hp_radio_{item['id']}",
             )
             hp_responses[item["id"]] = answer
@@ -975,27 +881,26 @@ def render_headphone_check():
         submitted = st.form_submit_button("Submit & Next")
 
     if submitted:
-        # Require answers for all headphone items
         if any(v is None for v in hp_responses.values()):
             st.error("Please answer every headphone/speaker check item before continuing.")
             return
 
-        # Save screening + headphone to the same sheet (one row per participant)
         if not st.session_state.survey_saved:
             timestamp = datetime.now(timezone.utc).isoformat()
             p_id = st.session_state.participant_id
             s = st.session_state.screening_answers
 
-            # Full row: timestamp_utc, participant_id, q1..q6, hp1..hp4
+            # [timestamp_utc, participant_id, q1..q7, hp1..hp4]
             full_row = [
                 timestamp,
                 p_id,
                 s["q1"],
                 s["q2"],
                 s["q3"],
-                s["q4"],
+                s["q4_race_ethnicity"],
                 s["q5"],
                 s["q6"],
+                s["q7"],
                 hp_responses.get("hp1", ""),
                 hp_responses.get("hp2", ""),
                 hp_responses.get("hp3", ""),
@@ -1003,14 +908,11 @@ def render_headphone_check():
             ]
 
             try:
-                # Find existing stub row by participant_id in column 2
                 try:
                     cell = survey_ws.find(p_id, in_column=2)
                     row_idx = cell.row
-                    # Update the existing row with full data
-                    survey_ws.update(f"A{row_idx}:L{row_idx}", [full_row])
+                    survey_ws.update(f"A{row_idx}:M{row_idx}", [full_row])
                 except Exception:
-                    # If not found for some reason, append as new row
                     survey_ws.append_row(full_row)
 
                 st.session_state.survey_saved = True
@@ -1074,7 +976,6 @@ def render_item_page(page_name: str, item_config: dict):
     if page_name not in st.session_state.item_audio_shown:
         st.session_state.item_audio_shown[page_name] = False
 
-    # No big header here to save vertical space
     main_items = build_main_items_for_participant(pid)
     keys = list(main_items.keys())
     idx = keys.index(page_name) + 1
@@ -1092,9 +993,8 @@ def render_item_page(page_name: str, item_config: dict):
     )
 
     file_id = item_config["drive_file_id"]
-    audio_id = item_config["audio_id"]  # normalized current_path
+    audio_id = item_config["audio_id"]
 
-    # Button to start timing + reveal audio
     if not st.session_state.item_audio_shown[page_name]:
         if st.button("▶️ Start & show audio", key=f"start_audio_{page_name}"):
             st.session_state.item_start_times[page_name] = datetime.now(timezone.utc)
@@ -1103,7 +1003,6 @@ def render_item_page(page_name: str, item_config: dict):
     else:
         st.info("Audio started. You may listen up to two times.")
 
-    # Render audio player
     if st.session_state.item_audio_shown[page_name]:
         try:
             audio_bytes = download_file_bytes(file_id)
@@ -1116,7 +1015,6 @@ def render_item_page(page_name: str, item_config: dict):
             st.error("Could not load the audio file for this item.")
             st.exception(e)
 
-    # Tight divider + small gap before transcription section
     st.markdown(
         "<hr style='margin-top:0.3rem; margin-bottom:0.3rem;'>",
         unsafe_allow_html=True,
@@ -1125,7 +1023,7 @@ def render_item_page(page_name: str, item_config: dict):
     with st.form(f"transcription_form_{page_name}"):
         transcript = st.text_area(
             "Transcript (after listening; you may listen up to two times):",
-            height=30,  # ~one line
+            height=30,
             key=f"transcript_{page_name}",
         )
 
@@ -1145,17 +1043,14 @@ def render_item_page(page_name: str, item_config: dict):
         duration_sec = (end_time - start_time).total_seconds()
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Columns:
-        # [timestamp_utc, participant_id, audio_id, start_time, end_time,
-        #  duration_sec, transcript]
         row = [
-            timestamp,                     # timestamp_utc
-            participant_id,                # participant_id
-            audio_id,                      # audio_id (normalized current_path)
-            start_time.isoformat(),        # start_time
-            end_time.isoformat(),          # end_time
-            round(duration_sec, 3),        # duration_sec
-            transcript,                    # final transcript
+            timestamp,
+            participant_id,
+            audio_id,
+            start_time.isoformat(),
+            end_time.isoformat(),
+            round(duration_sec, 3),
+            transcript,
         ]
 
         try:
@@ -1195,7 +1090,6 @@ def main():
     inject_layout_css()
 
     pages = get_pages()
-    # Ensure page_index is in range (defensive, in case pages changes shape)
     if st.session_state.page_index >= len(pages):
         st.session_state.page_index = 0
 
