@@ -778,10 +778,15 @@ def render_screening():
         q7 = st.radio(
             "7. Please choose which of the following best describes your previous experience communicating with individuals who have a disability that impacts speech.",
             [
-                "I have one or more close friends or family members with a disability that impacts speech.",
-                "I work in a field that supports people who have disabilities that impact speech.",
-                "I have had passing conversations with individuals who have a disability that impacts speech.",
+                #"I have one or more close friends or family members with a disability that impacts speech.",
+                #"I work in a field that supports people who have disabilities that impact speech.",
+                #"I have had passing conversations with individuals who have a disability that impacts speech.",
+                #"I do not remember communicating with an individual who has a disability that impacts speech.",
                 "I do not remember communicating with an individual who has a disability that impacts speech.",
+                "I have had passing conversations with individuals who have a disability that impacts speech.",
+                "I have regularly interacted with one person who has a disability that impacts speech.",
+                "I have regularly interacted with multiple people who have disabilities that impact speech.",
+                "I have specific professional training in speech disabilities."
             ],
             index=None,
             key="q7_experience",
