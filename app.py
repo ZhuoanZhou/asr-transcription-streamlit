@@ -37,7 +37,6 @@ def inject_layout_css():
 
 LOGIN_PAGE = "login"
 FINAL_PAGE = "thank_you"
-# Fixed pages; item pages are added dynamically later per participant
 BASE_PAGES = [LOGIN_PAGE, "intro", "screening", "headphone_instructions", "headphone", "instructions"]
 
 
@@ -77,7 +76,6 @@ def get_existing_participant_ids():
     """
     ids = set()
 
-    # survey sheet
     try:
         survey_ws = get_worksheet("survey")
         survey_rows = survey_ws.get_all_values()
@@ -87,7 +85,6 @@ def get_existing_participant_ids():
     except Exception:
         pass
 
-    # transcript sheet
     try:
         transcript_ws = get_worksheet("transcript")
         trans_rows = transcript_ws.get_all_values()
@@ -597,7 +594,7 @@ def render_login():
 
                 try:
                     survey_ws = get_worksheet("survey")
-                    stub_row = ["", new_id] + [""] * 11  # total 13 columns
+                    stub_row = ["", new_id] + [""] * 11  # keep existing 13-column sheet
                     survey_ws.append_row(stub_row)
                 except Exception as e:
                     st.error("Error creating a record for your participant ID in the survey sheet.")
@@ -648,10 +645,23 @@ def render_login():
                 has_survey_row = row_for_pid is not None
                 is_complete_survey = False
                 if has_survey_row:
-                    # [ts, pid, q1..q7, hp1..hp4] = 13 columns total
+                    # Keep existing 13-column sheet layout:
+                    # [ts, pid, q1, q2, q3, race(blank now), q4, q5, q6, hp1, hp2, hp3, hp4]
                     padded = row_for_pid + [""] * max(0, 13 - len(row_for_pid))
-                    q_hp_cells = padded[2:13]
-                    is_complete_survey = all((c or "").strip() != "" for c in q_hp_cells)
+
+                    required_cells = [
+                        padded[2],   # q1
+                        padded[3],   # q2
+                        padded[4],   # q3
+                        padded[6],   # q4
+                        padded[7],   # q5
+                        padded[8],   # q6
+                        padded[9],   # hp1
+                        padded[10],  # hp2
+                        padded[11],  # hp3
+                        padded[12],  # hp4
+                    ]
+                    is_complete_survey = all((c or "").strip() != "" for c in required_cells)
 
                 has_transcripts = any(
                     len(r) > 1 and r[1] == pid for r in trans_rows[1:]
@@ -759,29 +769,23 @@ def render_screening():
 
         q3 = st.text_input("3. What is your gender?", key="q3_gender")
 
-        q4_race = st.text_input("4. What is your race/ethnicity?", key="q4_race_ethnicity")
-
-        q5 = st.radio(
-            "5. What is the highest education level you have completed?",
+        q4 = st.radio(
+            "4. What is the highest education level you have completed?",
             ["Some high school", "High school", "Some college", "College", "Advanced degree"],
             index=None,
-            key="q5_education",
+            key="q4_education",
+        )
+
+        q5 = st.radio(
+            "5. Have you ever had a speech disability?",
+            ["Yes", "No"],
+            index=None,
+            key="q5_speech_disability",
         )
 
         q6 = st.radio(
-            "6. Have you ever had a speech disability?",
-            ["Yes", "No"],
-            index=None,
-            key="q6_speech_disability",
-        )
-
-        q7 = st.radio(
-            "7. Please choose which of the following best describes your previous experience communicating with individuals who have a disability that impacts speech.",
+            "6. Please choose which of the following best describes your previous experience communicating with individuals who have a disability that impacts speech.",
             [
-                #"I have one or more close friends or family members with a disability that impacts speech.",
-                #"I work in a field that supports people who have disabilities that impact speech.",
-                #"I have had passing conversations with individuals who have a disability that impacts speech.",
-                #"I do not remember communicating with an individual who has a disability that impacts speech.",
                 "I do not remember communicating with an individual who has a disability that impacts speech.",
                 "I have had passing conversations with individuals who have a disability that impacts speech.",
                 "I have regularly interacted with one person who has a disability that impacts speech.",
@@ -789,14 +793,14 @@ def render_screening():
                 "I have specific professional training in speech disabilities."
             ],
             index=None,
-            key="q7_experience",
+            key="q6_experience",
         )
 
         submitted = st.form_submit_button("Submit & Next")
 
     if submitted:
-        missing_radio = any(ans is None for ans in [q1, q2, q5, q6, q7])
-        if missing_radio or q3.strip() == "" or q4_race.strip() == "":
+        missing_radio = any(ans is None for ans in [q1, q2, q4, q5, q6])
+        if missing_radio or q3.strip() == "":
             st.error("Please answer **all** questions before continuing.")
             return
 
@@ -804,10 +808,9 @@ def render_screening():
             "q1": q1,
             "q2": q2,
             "q3": q3,
-            "q4_race_ethnicity": q4_race,
+            "q4": q4,
             "q5": q5,
             "q6": q6,
-            "q7": q7,
         }
 
         go_next_page()
@@ -895,21 +898,21 @@ def render_headphone_check():
             p_id = st.session_state.participant_id
             s = st.session_state.screening_answers
 
-            # [timestamp_utc, participant_id, q1..q7, hp1..hp4]
+            # Keep existing 13-column sheet layout by writing blank race column
             full_row = [
-                timestamp,
-                p_id,
-                s["q1"],
-                s["q2"],
-                s["q3"],
-                s["q4_race_ethnicity"],
-                s["q5"],
-                s["q6"],
-                s["q7"],
-                hp_responses.get("hp1", ""),
-                hp_responses.get("hp2", ""),
-                hp_responses.get("hp3", ""),
-                hp_responses.get("hp4", ""),
+                timestamp,                 # A
+                p_id,                      # B
+                s["q1"],                   # C
+                s["q2"],                   # D
+                s["q3"],                   # E
+                "",                        # F race/ethnicity intentionally blank
+                s["q4"],                   # G
+                s["q5"],                   # H
+                s["q6"],                   # I
+                hp_responses.get("hp1", ""),  # J
+                hp_responses.get("hp2", ""),  # K
+                hp_responses.get("hp3", ""),  # L
+                hp_responses.get("hp4", ""),  # M
             ]
 
             try:
