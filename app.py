@@ -898,14 +898,14 @@ def render_headphone_check():
             p_id = st.session_state.participant_id
             s = st.session_state.screening_answers
 
-            # Keep existing 13-column sheet layout by writing blank race column
+            # Keep existing 13-column sheet layout by leaving the old race column blank
             full_row = [
                 timestamp,                 # A
                 p_id,                      # B
                 s["q1"],                   # C
                 s["q2"],                   # D
                 s["q3"],                   # E
-                "",                        # F race/ethnicity intentionally blank
+                "placeholder",                        # F old race column kept blank
                 s["q4"],                   # G
                 s["q5"],                   # H
                 s["q6"],                   # I
