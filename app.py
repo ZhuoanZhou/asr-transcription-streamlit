@@ -770,21 +770,21 @@ def render_screening():
         q3 = st.text_input("3. What is your gender?", key="q3_gender")
 
         q4 = st.radio(
-            "4. What is the highest education level you have completed?",
+            "3. What is the highest education level you have completed?",
             ["Some high school", "High school", "Some college", "College", "Advanced degree"],
             index=None,
             key="q4_education",
         )
 
         q5 = st.radio(
-            "5. Have you ever had a speech disability?",
+            "4. Have you ever had a speech disability?",
             ["Yes", "No"],
             index=None,
             key="q5_speech_disability",
         )
 
         q6 = st.radio(
-            "6. Please choose which of the following best describes your previous experience communicating with individuals who have a disability that impacts speech.",
+            "5. Please choose which of the following best describes your previous experience communicating with individuals who have a disability that impacts speech.",
             [
                 "I do not remember communicating with an individual who has a disability that impacts speech.",
                 "I have had passing conversations with individuals who have a disability that impacts speech.",
@@ -898,14 +898,14 @@ def render_headphone_check():
             p_id = st.session_state.participant_id
             s = st.session_state.screening_answers
 
-            # Keep existing 13-column sheet layout by leaving the old race column blank
+            # Keep existing 13-column sheet layout by writing blank race column
             full_row = [
                 timestamp,                 # A
                 p_id,                      # B
                 s["q1"],                   # C
                 s["q2"],                   # D
                 s["q3"],                   # E
-                "placeholder",                        # F old race column kept blank
+                "placeholder",                        # F race/ethnicity intentionally blank
                 s["q4"],                   # G
                 s["q5"],                   # H
                 s["q6"],                   # I
