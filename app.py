@@ -770,21 +770,21 @@ def render_screening():
         q3 = st.text_input("3. What is your gender?", key="q3_gender")
 
         q4 = st.radio(
-            "3. What is the highest education level you have completed?",
+            "4. What is the highest education level you have completed?",
             ["Some high school", "High school", "Some college", "College", "Advanced degree"],
             index=None,
             key="q4_education",
         )
 
         q5 = st.radio(
-            "4. Have you ever had a speech disability?",
+            "5. Have you ever had a speech disability?",
             ["Yes", "No"],
             index=None,
             key="q5_speech_disability",
         )
 
         q6 = st.radio(
-            "5. Please choose which of the following best describes your previous experience communicating with individuals who have a disability that impacts speech.",
+            "6. Please choose which of the following best describes your previous experience communicating with individuals who have a disability that impacts speech.",
             [
                 "I do not remember communicating with an individual who has a disability that impacts speech.",
                 "I have had passing conversations with individuals who have a disability that impacts speech.",
